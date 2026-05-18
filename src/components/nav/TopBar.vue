@@ -10,6 +10,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
 import UpdateModal from '@/components/modals/UpdateModal.vue';
 import { useManagedPolling } from '@/composables/useManagedPolling';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
+import { waitForServiceRecovery } from '@/utils/restartRecovery';
 import Spinner from '@/components/ui/Spinner.vue';
 
 defineOptions({ name: 'TopBar' });
@@ -146,22 +147,6 @@ const handleLogout = () => {
   void appRuntime.stopSession('logout');
 };
 
-const waitForService = async (maxAttempts = 20, interval = 2000) => {
-  // Use raw fetch to bypass axios interceptors (401 redirect, token refresh)
-  // Any HTTP response (even 401) means the service is back — only network
-  // errors or 5xx mean it's still restarting
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const res = await fetch('/api/stats', { signal: AbortSignal.timeout(3000) });
-      if (res.status < 500) return true;
-    } catch {
-      // network error — still down
-    }
-    await new Promise((r) => setTimeout(r, interval));
-  }
-  return false;
-};
-
 const handleRestartService = async () => {
   if (restarting.value) return;
   restarting.value = true;
@@ -172,7 +157,14 @@ const handleRestartService = async () => {
     const response = await ApiService.post('/restart_service', {});
     if (response.success) {
       restartMessage.value = 'Service restarting, waiting for it to come back...';
-      const up = await waitForService();
+      const up = await waitForServiceRecovery({
+        endpoint: '/api/stats',
+        initialDelayMs: 4000,
+        intervalMs: 1500,
+        timeoutMs: 60000,
+        stableResponsesRequired: 3,
+        isReady: (response) => response.status < 500,
+      });
       if (up) {
         restartMessage.value = 'Service is back! Reloading...';
         setTimeout(() => {
@@ -195,7 +187,14 @@ const handleRestartService = async () => {
       error.message?.includes('500');
     if (isRestartExpected) {
       restartMessage.value = 'Service restarting, waiting for it to come back...';
-      const up = await waitForService();
+      const up = await waitForServiceRecovery({
+        endpoint: '/api/stats',
+        initialDelayMs: 4000,
+        intervalMs: 1500,
+        timeoutMs: 60000,
+        stableResponsesRequired: 3,
+        isReady: (response) => response.status < 500,
+      });
       if (up) {
         restartMessage.value = 'Service is back! Reloading...';
         setTimeout(() => {

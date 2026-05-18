@@ -321,6 +321,7 @@ import { ref, reactive, onMounted, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import ApiService from '@/utils/api';
 import { useSystemStore } from '@/stores/system';
+import { waitForServiceRecovery } from '@/utils/restartRecovery';
 
 defineOptions({ name: 'WebSettings' });
 
@@ -443,26 +444,52 @@ async function restartService() {
     const response = await ApiService.post('/restart_service', {});
 
     if (response.success) {
-      showMessage('Service restart initiated. Page will reload...', true);
+      showMessage('Service restarting. Waiting for it to come back...', true);
       needsRestart.value = false;
 
-      // Wait a moment then reload the page
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      const recovered = await waitForServiceRecovery({
+        endpoint: '/api/stats',
+        initialDelayMs: 4000,
+        intervalMs: 1500,
+        timeoutMs: 60000,
+        stableResponsesRequired: 3,
+        isReady: (response) => response.status < 500,
+      });
+
+      if (recovered) {
+        showMessage('Service is back. Reloading page...', true);
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        showMessage('Service did not respond in time. Try reloading manually.', false);
+      }
     } else {
       showMessage(response.error || 'Failed to restart service', false);
     }
   } catch (error: any) {
     // Network errors during restart are expected as the service goes down
     if (error.code === 'ERR_NETWORK' || error.message?.includes('Network error')) {
-      showMessage('Service restarting... Page will reload', true);
+      showMessage('Service restarting. Waiting for it to come back...', true);
       needsRestart.value = false;
 
-      // Wait for service to come back and reload
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
+      const recovered = await waitForServiceRecovery({
+        endpoint: '/api/stats',
+        initialDelayMs: 4000,
+        intervalMs: 1500,
+        timeoutMs: 60000,
+        stableResponsesRequired: 3,
+        isReady: (response) => response.status < 500,
+      });
+
+      if (recovered) {
+        showMessage('Service is back. Reloading page...', true);
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        showMessage('Service did not respond in time. Try reloading manually.', false);
+      }
     } else {
       console.error('Failed to restart service:', error);
       showMessage(error.message || 'Failed to restart service', false);

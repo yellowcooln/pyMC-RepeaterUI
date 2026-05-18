@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue';
+import { ref, watch } from 'vue';
 import Spinner from '@/components/ui/Spinner.vue';
 import apiClient from '@/utils/api';
+import { waitForServiceRecovery } from '@/utils/restartRecovery';
 
 interface Props {
   modelValue: boolean;
@@ -19,21 +20,11 @@ const emit = defineEmits<{
 
 const isRestarting = ref(false);
 const hasFailed = ref(false);
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
-let pollAttempts = 0;
-let stableCount = 0;
-// 10s initial delay + up to 50×1s polling = 60s total
-// 5 consecutive successes required before reload — needs headroom above STABLE_REQUIRED
-const MAX_ATTEMPTS = 50;
-const STABLE_REQUIRED = 5;
 
 function close() {
   if (isRestarting.value && !hasFailed.value) return;
   isRestarting.value = false;
   hasFailed.value = false;
-  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-  pollAttempts = 0;
-  stableCount = 0;
   emit('update:modelValue', false);
 }
 
@@ -43,38 +34,17 @@ async function handleRestart() {
   try {
     await apiClient.post('/restart_service', {});
   } catch { /* network drop on restart is expected */ }
-  pollAttempts = 0;
-  stableCount = 0;
-  pollTimer = setTimeout(poll, 10000);
-}
 
-function poll() {
-  pollAttempts++;
-  fetch('/api/needs_setup', { method: 'GET' })
-    .then(res => {
-      if (res.ok) {
-        stableCount++;
-        if (stableCount >= STABLE_REQUIRED) {
-          window.location.reload();
-        } else {
-          // API responded but we need sustained stability before reloading —
-          // keep polling without counting this as a failure attempt
-          pollTimer = setTimeout(poll, 1000);
-        }
-      } else {
-        stableCount = 0;
-        schedulePoll();
-      }
-    })
-    .catch(() => {
-      stableCount = 0;
-      schedulePoll();
-    });
-}
+  const recovered = await waitForServiceRecovery({
+    endpoint: '/api/needs_setup',
+    initialDelayMs: 10000,
+    intervalMs: 1000,
+    timeoutMs: 60000,
+    stableResponsesRequired: 5,
+  });
 
-function schedulePoll() {
-  if (pollAttempts < MAX_ATTEMPTS) {
-    pollTimer = setTimeout(poll, 1000);
+  if (recovered) {
+    window.location.reload();
   } else {
     isRestarting.value = false;
     hasFailed.value = true;
@@ -85,14 +55,7 @@ watch(() => props.modelValue, (val) => {
   if (!val) {
     isRestarting.value = false;
     hasFailed.value = false;
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-    pollAttempts = 0;
-    stableCount = 0;
   }
-});
-
-onBeforeUnmount(() => {
-  if (pollTimer) clearTimeout(pollTimer);
 });
 </script>
 
@@ -176,4 +139,3 @@ onBeforeUnmount(() => {
     </Transition>
   </Teleport>
 </template>
-
