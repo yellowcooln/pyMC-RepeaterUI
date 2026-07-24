@@ -54,6 +54,7 @@ export interface JWTPayload {
   exp: number;
   iat: number;
   client_id: string;
+  auth_source?: 'local' | 'oidc' | string;
 }
 
 /**
@@ -102,6 +103,40 @@ export function shouldRefreshToken(): boolean {
   // Refresh if less than 5 minutes remaining (300 seconds)
   const timeUntilExpiry = payload.exp * 1000 - Date.now();
   return timeUntilExpiry > 0 && timeUntilExpiry < 300000;
+}
+
+export function isOidcAuthenticated(token = getToken()): boolean {
+  if (!token) return false;
+
+  const payload = parseJWT(token);
+  return payload?.auth_source === 'oidc';
+}
+
+export function normalizeReturnTo(value: unknown): string {
+  if (typeof value !== 'string') return '/';
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return '/';
+  if (trimmed.includes('\\')) return '/';
+
+  return trimmed;
+}
+
+export function buildOidcStartUrl(clientId: string, returnTo: string): string {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    return_to: normalizeReturnTo(returnTo),
+  });
+
+  return `/auth/oidc/start?${params.toString()}`;
+}
+
+export function startOidcLogin(
+  clientId: string,
+  returnTo: string,
+  navigate: (url: string) => void = (url) => window.location.assign(url),
+): void {
+  navigate(buildOidcStartUrl(clientId, returnTo));
 }
 
 /**

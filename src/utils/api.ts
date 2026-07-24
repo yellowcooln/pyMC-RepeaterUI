@@ -7,6 +7,7 @@ import {
   shouldRefreshToken,
   setToken,
   getClientId,
+  isOidcAuthenticated,
 } from './auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import type {
@@ -21,13 +22,14 @@ import type {
 } from '@/types/api';
 import { generatedApiClient } from '@/services/api/generatedClient';
 
-type GeneratedEndpointData<T extends (...args: any[]) => Promise<{ data: any }>> =
-  Awaited<ReturnType<T>>['data'];
+type GeneratedEndpointData<T extends (...args: never[]) => Promise<{ data: unknown }>> = Awaited<
+  ReturnType<T>
+>['data'];
 
-type EndpointDataPayload<T extends (...args: any[]) => Promise<{ data: any }>> =
+type EndpointDataPayload<T extends (...args: never[]) => Promise<{ data: unknown }>> =
   GeneratedEndpointData<T> extends { data?: infer D } ? D : never;
 
-type EndpointApiResponse<T extends (...args: any[]) => Promise<{ data: any }>> = ApiResponse<
+type EndpointApiResponse<T extends (...args: never[]) => Promise<{ data: unknown }>> = ApiResponse<
   EndpointDataPayload<T>
 >;
 
@@ -38,7 +40,9 @@ type AclClientsResponse = EndpointApiResponse<
 type AclRemoveClientResponse = EndpointApiResponse<
   (typeof generatedApiClient)['aclRemoveClient']['aclRemoveClientCreate']
 >;
-type AclStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['aclStats']['aclStatsList']>;
+type AclStatsResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['aclStats']['aclStatsList']
+>;
 type RoomMessagesResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessages']['roomMessagesList']
 >;
@@ -48,7 +52,9 @@ type RoomPostMessageResponse = EndpointApiResponse<
 type RoomMessagesClearResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessagesClear']['roomMessagesClearDelete']
 >;
-type RoomStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['roomStats']['roomStatsList']>;
+type RoomStatsResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['roomStats']['roomStatsList']
+>;
 type RoomClientsResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomClients']['roomClientsList']
 >;
@@ -92,9 +98,15 @@ type UpdateDefaultRegionResponse = EndpointApiResponse<
 >;
 type PolicyDocumentResponse = ApiResponse<PolicyDocumentData>;
 type PolicyValidationResponse = ApiResponse<PolicyValidationResult>;
-type DeleteAdvertResponse = EndpointApiResponse<(typeof generatedApiClient)['advert']['advertDelete']>;
-type IdentitiesResponse = EndpointApiResponse<(typeof generatedApiClient)['identities']['identitiesList']>;
-type IdentityResponse = EndpointApiResponse<(typeof generatedApiClient)['identity']['identityList']>;
+type DeleteAdvertResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['advert']['advertDelete']
+>;
+type IdentitiesResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['identities']['identitiesList']
+>;
+type IdentityResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['identity']['identityList']
+>;
 type CreateIdentityResponse = EndpointApiResponse<
   (typeof generatedApiClient)['createIdentity']['createIdentityCreate']
 >;
@@ -142,6 +154,22 @@ export interface ApiResponse<T = unknown> {
   filters?: Record<string, unknown>;
 }
 
+export interface AuthMethods {
+  success: boolean;
+  local: boolean;
+  oidc: boolean;
+  oidc_provider_name?: string;
+  error?: string;
+}
+
+export interface OidcExchangeResponse {
+  success: boolean;
+  token?: string;
+  error?: string;
+  username?: string;
+  expires_in?: number;
+}
+
 // Configure the base API URL
 // Use relative paths in both dev and production since Vite proxy handles dev forwarding
 const API_BASE_URL = '/api';
@@ -170,6 +198,12 @@ async function refreshToken(): Promise<string> {
         throw new Error('No token to refresh');
       }
 
+      if (isOidcAuthenticated(token)) {
+        const appRuntime = useAppRuntimeStore();
+        await appRuntime.handleAuthFailure('reauthentication');
+        throw new Error('OIDC reauthentication required');
+      }
+
       const clientId = getClientId();
       const response = await axios.post(
         `${API_SERVER_URL}/auth/refresh`,
@@ -186,13 +220,19 @@ async function refreshToken(): Promise<string> {
         const newToken = response.data.token;
         setToken(newToken);
         return newToken;
+      } else if (response.data.error === 'reauthentication_required') {
+        const appRuntime = useAppRuntimeStore();
+        await appRuntime.handleAuthFailure('reauthentication');
+        throw new Error('OIDC reauthentication required');
       } else {
         throw new Error('Token refresh failed');
       }
     } catch (error) {
       console.error('Token refresh error:', error);
-      const appRuntime = useAppRuntimeStore();
-      await appRuntime.handleAuthFailure('expired');
+      if (!(error instanceof Error && error.message === 'OIDC reauthentication required')) {
+        const appRuntime = useAppRuntimeStore();
+        await appRuntime.handleAuthFailure('expired');
+      }
       throw error;
     } finally {
       isRefreshing = false;
@@ -228,7 +268,12 @@ export { authClient };
 authClient.interceptors.request.use(
   async (config) => {
     // Skip auth for login and refresh endpoints
-    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/refresh')) {
+    if (
+      config.url?.includes('/auth/login') ||
+      config.url?.includes('/auth/refresh') ||
+      config.url?.includes('/auth/methods') ||
+      config.url?.includes('/auth/oidc/exchange')
+    ) {
       return config;
     }
 
@@ -237,6 +282,11 @@ authClient.interceptors.request.use(
     if (token) {
       // Check if token should be refreshed
       if (shouldRefreshToken()) {
+        if (isOidcAuthenticated(token)) {
+          const appRuntime = useAppRuntimeStore();
+          void appRuntime.handleAuthFailure('reauthentication');
+          return Promise.reject(new Error('OIDC reauthentication required'));
+        }
         try {
           const newToken = await refreshToken();
           config.headers.Authorization = `Bearer ${newToken}`;
@@ -272,11 +322,15 @@ authClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
+      const requestToken = (
+        error.config?.headers?.['Authorization'] as string | undefined
+      )?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
+        void appRuntime.handleAuthFailure(
+          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
+        );
       }
     }
 
@@ -298,6 +352,11 @@ apiClient.interceptors.request.use(
     if (token) {
       // Check if token should be refreshed
       if (shouldRefreshToken()) {
+        if (isOidcAuthenticated(token)) {
+          const appRuntime = useAppRuntimeStore();
+          void appRuntime.handleAuthFailure('reauthentication');
+          return Promise.reject(new Error('OIDC reauthentication required'));
+        }
         try {
           const newToken = await refreshToken();
           config.headers.Authorization = `Bearer ${newToken}`;
@@ -333,11 +392,15 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
+      const requestToken = (
+        error.config?.headers?.['Authorization'] as string | undefined
+      )?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
+        void appRuntime.handleAuthFailure(
+          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
+        );
       }
     }
 
@@ -356,6 +419,11 @@ export class ApiService {
     }
 
     if (shouldRefreshToken()) {
+      if (isOidcAuthenticated(token)) {
+        const appRuntime = useAppRuntimeStore();
+        void appRuntime.handleAuthFailure('reauthentication');
+        throw new Error('OIDC reauthentication required');
+      }
       return refreshToken();
     }
 
@@ -502,7 +570,10 @@ export class ApiService {
   }): Promise<NeighborLinksResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinks.neighborLinksList(params, requestParams);
+      const response = await generatedApiClient.neighborLinks.neighborLinksList(
+        params,
+        requestParams,
+      );
       return response.data as NeighborLinksApiResponse as NeighborLinksResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -520,10 +591,13 @@ export class ApiService {
   ): Promise<NeighborLinkHistoryResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(params, {
-        ...requestParams,
-        signal: config?.signal as AbortSignal | undefined,
-      });
+      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(
+        params,
+        {
+          ...requestParams,
+          signal: config?.signal as AbortSignal | undefined,
+        },
+      );
       return response.data as NeighborLinkHistoryApiResponse as NeighborLinkHistoryResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -690,14 +764,19 @@ export class ApiService {
   }): Promise<PolicyValidationResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyValidate.policyValidateCreate(payload, params);
+      const response = await generatedApiClient.policyValidate.policyValidateCreate(
+        payload,
+        params,
+      );
       return response.data as PolicyValidationResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
     }
   }
 
-  static async getPolicyGroups(kind?: PolicyGroupKind): Promise<ApiResponse<Record<string, unknown>>> {
+  static async getPolicyGroups(
+    kind?: PolicyGroupKind,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
       const response = await generatedApiClient.policyGroups.policyGroupsList(
@@ -748,7 +827,10 @@ export class ApiService {
   }): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(data, params);
+      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(
+        data,
+        params,
+      );
       return response.data as ApiResponse<Record<string, unknown>>;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -821,10 +903,7 @@ export class ApiService {
   static async deleteAdvert(id: number): Promise<DeleteAdvertResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.advert.advertDelete(
-        { advert_id: id },
-        params,
-      );
+      const response = await generatedApiClient.advert.advertDelete({ advert_id: id }, params);
       return response.data;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -885,16 +964,15 @@ export class ApiService {
   > {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response =
-        await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
-          {
-            timeout,
-            filter_mask,
-            since,
-            prefix_only,
-          },
-          params,
-        );
+      const response = await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
+        {
+          timeout,
+          filter_mask,
+          since,
+          prefix_only,
+        },
+        params,
+      );
       return response.data as ApiResponse<{
         session_id: string;
         tag: number;
@@ -1252,9 +1330,7 @@ export class ApiService {
   // Backup & Restore
   // ========================
 
-  static async exportConfig(
-    includeSecrets = false,
-  ): Promise<
+  static async exportConfig(includeSecrets = false): Promise<
     ApiResponse<{
       meta: {
         exported_at: string;
@@ -1280,10 +1356,7 @@ export class ApiService {
   static async importConfig(config: Record<string, unknown>): Promise<ImportConfigResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.configImport.configImportCreate(
-        { config },
-        params,
-      );
+      const response = await generatedApiClient.configImport.configImportCreate({ config }, params);
       return response.data;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -1395,6 +1468,31 @@ export class ApiService {
     // Something else happened
     return new Error(error instanceof Error ? error.message : 'Unknown error occurred');
   }
+}
+
+export async function fetchAuthMethods(): Promise<AuthMethods> {
+  const response = await authClient.get<AuthMethods>('/auth/methods');
+  const data = response.data;
+
+  return {
+    success: data.success === true,
+    local: data.local === true,
+    oidc: data.oidc === true,
+    oidc_provider_name: data.oidc_provider_name,
+    error: data.error,
+  };
+}
+
+export async function exchangeOidcCode(
+  oidcExchange: string,
+  clientId: string,
+): Promise<OidcExchangeResponse> {
+  const response = await authClient.post<OidcExchangeResponse>('/auth/oidc/exchange', {
+    oidc_exchange: oidcExchange,
+    client_id: clientId,
+  });
+
+  return response.data;
 }
 
 // Export the axios instance for direct use if needed

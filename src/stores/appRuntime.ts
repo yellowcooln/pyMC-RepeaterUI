@@ -3,7 +3,12 @@ import { defineStore } from 'pinia';
 import router from '@/router';
 import { clearToken, getToken, isTokenExpired } from '@/utils/auth';
 
-export type AuthFailureReason = 'unauthorized' | 'forbidden' | 'expired' | 'logout';
+export type AuthFailureReason =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'expired'
+  | 'logout'
+  | 'reauthentication';
 
 export const useAppRuntimeStore = defineStore('appRuntime', () => {
   const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -16,10 +21,7 @@ export const useAppRuntimeStore = defineStore('appRuntime', () => {
 
   const canMaintainConnections = computed(
     () =>
-      isOnline.value &&
-      isDocumentVisible.value &&
-      isAuthenticated.value &&
-      !logoutInProgress.value,
+      isOnline.value && isDocumentVisible.value && isAuthenticated.value && !logoutInProgress.value,
   );
 
   function syncAuthState() {
@@ -49,6 +51,7 @@ export const useAppRuntimeStore = defineStore('appRuntime', () => {
       return;
     }
 
+    clearToken();
     logoutInProgress.value = true;
     authFailureReason.value = reason;
     isAuthenticated.value = false;
@@ -67,10 +70,8 @@ export const useAppRuntimeStore = defineStore('appRuntime', () => {
     packetStore.reset();
     systemStore.reset();
     dataService.reset();
-    clearToken();
-
     if (router.currentRoute.value.path !== '/login') {
-      await router.push('/login');
+      await router.push(reason === 'reauthentication' ? '/login?reauth=oidc' : '/login');
     }
 
     logoutInProgress.value = false;

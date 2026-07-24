@@ -50,8 +50,62 @@
           </p>
         </div>
 
+        <div
+          v-if="authMethodsLoading"
+          class="flex items-center justify-center gap-2 py-4 text-sm text-content-secondary"
+        >
+          <Spinner size="sm" color="current" />
+          <span>Loading sign-in methods...</span>
+        </div>
+
+        <div
+          v-if="authMethodsError"
+          class="bg-accent-amber/opacity-light border border-accent-amber/opacity-medium rounded-[12px] p-2.5 sm:p-3.5 backdrop-blur-sm mt-4"
+          role="alert"
+        >
+          <p class="text-accent-amber text-xs sm:text-sm font-medium">
+            {{ authMethodsError }}
+          </p>
+        </div>
+
+        <div
+          v-if="oidcExchangeLoading"
+          class="flex items-center justify-center gap-2 py-4 text-sm text-content-secondary"
+        >
+          <Spinner size="sm" color="current" />
+          <span>Completing sign-in...</span>
+        </div>
+
+        <button
+          v-if="!authMethodsLoading && oidcLoginEnabled"
+          type="button"
+          data-testid="oidc-login-button"
+          :disabled="oidcStarting || oidcExchangeLoading"
+          class="button-glass w-full relative overflow-hidden bg-primary/opacity-medium hover:bg-primary/opacity-medium active:scale-[0.98] text-primary font-semibold py-3 sm:py-4 px-4 rounded-[12px] border border-primary/opacity-heavy hover:border-primary/opacity-heavy transition-all duration-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-2.5 group mt-6 sm:mt-8 text-sm sm:text-base backdrop-blur-sm"
+          @click="handleOidcLogin"
+        >
+          <LogIn class="w-4 h-4 sm:w-5 sm:h-5" />
+          <span>{{ oidcStarting ? 'Redirecting...' : `Sign in with ${oidcProviderName}` }}</span>
+        </button>
+
+        <div
+          v-if="!authMethodsLoading && localLoginEnabled && oidcLoginEnabled"
+          class="my-4 flex items-center gap-3"
+          aria-hidden="true"
+        >
+          <div class="h-px flex-1 bg-stroke-subtle dark:bg-stroke/opacity-light"></div>
+          <span class="text-[11px] uppercase tracking-wide text-content-muted">or</span>
+          <div class="h-px flex-1 bg-stroke-subtle dark:bg-stroke/opacity-light"></div>
+        </div>
+
         <!-- Login Form -->
-        <form @submit.prevent="handleLogin" autocomplete="on" action="/" class="space-y-3 sm:space-y-4">
+        <form
+          v-if="!authMethodsLoading && localLoginEnabled"
+          @submit.prevent="handleLogin"
+          autocomplete="on"
+          action="/"
+          class="space-y-3 sm:space-y-4"
+        >
           <!-- Username Field -->
           <div class="form-group">
             <label
@@ -154,10 +208,16 @@
         </form>
 
         <!-- Footer Info -->
-        <div class="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-stroke-subtle dark:border-stroke/opacity-light">
+        <div
+          class="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-stroke-subtle dark:border-stroke/opacity-light"
+        >
           <!-- Powered by MeshCore -->
           <div class="flex flex-col items-center justify-center mb-4">
-            <p class="text-content-muted text-[10px] sm:text-xs mb-1.5 tracking-wide uppercase opacity-60">Powered by</p>
+            <p
+              class="text-content-muted text-[10px] sm:text-xs mb-1.5 tracking-wide uppercase opacity-60"
+            >
+              Powered by
+            </p>
             <img
               src="@/assets/meshcore.svg"
               alt="MeshCore"
@@ -202,9 +262,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { setToken, getClientId } from '@/utils/auth';
-import { authClient } from '@/utils/api';
+import { useRoute, useRouter } from 'vue-router';
+import { LogIn } from '@lucide/vue';
+import { setToken, getClientId, normalizeReturnTo, startOidcLogin } from '@/utils/auth';
+import { authClient, exchangeOidcCode, fetchAuthMethods, type AuthMethods } from '@/utils/api';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue';
 import Spinner from '@/components/ui/Spinner.vue';
@@ -228,8 +289,9 @@ interface LoginResponse {
 }
 
 const router = useRouter();
+const route = useRoute();
 const appRuntime = useAppRuntimeStore();
-const { theme } = useTheme();
+useTheme();
 const logoSrc = computed(() => openHopLogo);
 
 const username = ref('admin');
@@ -240,7 +302,19 @@ const rateLimitSeconds = ref(0);
 const showPasswordChangeModal = ref(false);
 const usedDefaultCredentials = ref(false);
 const siteName = ref('');
+const authMethodsLoading = ref(true);
+const authMethodsError = ref('');
+const authMethods = ref<AuthMethods>({
+  success: true,
+  local: true,
+  oidc: false,
+});
+const oidcStarting = ref(false);
+const oidcExchangeLoading = ref(false);
 const isRateLimited = computed(() => rateLimitSeconds.value > 0);
+const localLoginEnabled = computed(() => authMethods.value.local);
+const oidcLoginEnabled = computed(() => authMethods.value.oidc);
+const oidcProviderName = computed(() => authMethods.value.oidc_provider_name || 'provider');
 let rateLimitTimer: ReturnType<typeof setInterval> | null = null;
 let originalViewportMetaContent: string | null = null;
 
@@ -297,7 +371,8 @@ const normalizeViewportScale = async () => {
   }
 
   const originalContent =
-    viewportMeta.getAttribute('content') || 'width=device-width, initial-scale=1, viewport-fit=cover';
+    viewportMeta.getAttribute('content') ||
+    'width=device-width, initial-scale=1, viewport-fit=cover';
 
   viewportMeta.setAttribute(
     'content',
@@ -342,18 +417,93 @@ const startRateLimitCooldown = (seconds: number) => {
   }, 1000);
 };
 
+const loadAuthMethods = async () => {
+  authMethodsLoading.value = true;
+  authMethodsError.value = '';
+
+  try {
+    authMethods.value = await fetchAuthMethods();
+  } catch {
+    authMethods.value = {
+      success: true,
+      local: true,
+      oidc: false,
+    };
+    authMethodsError.value =
+      'Could not load sign-in methods. Local password sign-in is available if this repeater uses local authentication.';
+  } finally {
+    authMethodsLoading.value = false;
+  }
+};
+
+const removeOidcExchangeFromRoute = async () => {
+  const remainingQuery = { ...route.query };
+  delete remainingQuery.oidc_exchange;
+  await router.replace({
+    path: '/login',
+    query: remainingQuery,
+  });
+};
+
+const handleOidcExchange = async () => {
+  const exchange = route.query.oidc_exchange;
+  const oidcExchange = Array.isArray(exchange) ? exchange[0] : exchange;
+  if (!oidcExchange) return;
+
+  oidcExchangeLoading.value = true;
+  errorMessage.value = '';
+
+  try {
+    const loginData = await exchangeOidcCode(oidcExchange, getClientId());
+    await removeOidcExchangeFromRoute();
+
+    if (loginData.success && loginData.token) {
+      setToken(loginData.token);
+      appRuntime.markAuthenticated();
+      await navigateToDashboard();
+      return;
+    }
+
+    errorMessage.value = loginData.error || 'OIDC sign-in failed. Please try again.';
+  } catch (error: unknown) {
+    await removeOidcExchangeFromRoute();
+    const err = error as { response?: { data?: { error?: string } } };
+    errorMessage.value = err.response?.data?.error || 'OIDC sign-in failed. Please try again.';
+  } finally {
+    oidcExchangeLoading.value = false;
+  }
+};
+
+const handleOidcLogin = () => {
+  oidcStarting.value = true;
+  const requestedReturnTo = route.query.return_to;
+  const returnTo = normalizeReturnTo(
+    Array.isArray(requestedReturnTo) ? requestedReturnTo[0] : requestedReturnTo,
+  );
+  startOidcLogin(getClientId(), returnTo);
+};
+
 onBeforeUnmount(() => {
   stopRateLimitTimer();
   setViewportScaleLock(false);
 });
 
 onMounted(async () => {
-  try {
-    const resp = await authClient.get<{ success: boolean; site_name: string }>('/api/site_info');
-    siteName.value = resp.data?.site_name ?? '';
-  } catch {
-    // Silently ignore — site name is purely cosmetic
-  }
+  await Promise.all([
+    (async () => {
+      try {
+        const resp = await authClient.get<{ success: boolean; site_name: string }>(
+          '/api/site_info',
+        );
+        siteName.value = resp.data?.site_name ?? '';
+      } catch {
+        // Silently ignore — site name is purely cosmetic
+      }
+    })(),
+    loadAuthMethods(),
+  ]);
+
+  await handleOidcExchange();
 });
 
 const handleLogin = async () => {
@@ -576,7 +726,6 @@ const handleInputBlur = () => {
     inset 0 1px 0 color-mix(in srgb, var(--color-surface) 55%, transparent);
 }
 
-
 /* Floating animation for logo */
 @keyframes float {
   0%,
@@ -661,7 +810,6 @@ const handleInputBlur = () => {
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
-
 
 /* Form group hover effect */
 .form-group {
