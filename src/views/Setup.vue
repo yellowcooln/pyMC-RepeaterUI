@@ -717,7 +717,7 @@ const stepTitles = [
                   </div>
                   <h3 class="font-semibold text-content-primary">Select your hardware board</h3>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pl-10">
+                <div class="grid min-w-0 grid-cols-1 md:grid-cols-2 gap-3 pl-10">
                   <button
                     v-for="hardware in filteredHardwareOptions"
                     :key="hardware.key"
@@ -726,18 +726,18 @@ const stepTitles = [
                       scrollToNextAction();
                     "
                     :class="[
-                      'p-4 rounded-[12px] border transition-all duration-300 text-left backdrop-blur-sm',
+                      'min-w-0 overflow-hidden p-4 rounded-[12px] border transition-all duration-300 text-left backdrop-blur-sm',
                       setupStore.selectedHardware?.key === hardware.key
                         ? 'bg-gradient-to-r from-primary/20 to-primary/10 border-primary/opacity-heavy shadow-lg shadow-primary/20'
                         : 'bg-background-mute dark:bg-white/opacity-subtle border-stroke-subtle dark:border-stroke/opacity-light hover:bg-stroke-subtle dark:hover:bg-white/opacity-light hover:border-stroke dark:hover:border-stroke/opacity-medium',
                     ]"
                   >
-                    <div class="flex items-start justify-between gap-2">
-                      <div>
-                        <div class="font-medium text-content-primary mb-1">
+                    <div class="flex min-w-0 items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="font-medium text-content-primary mb-1 break-words [overflow-wrap:anywhere]">
                           {{ hardware.name }}
                         </div>
-                        <div class="text-sm text-content-secondary dark:text-content-muted">
+                        <div class="text-sm text-content-secondary dark:text-content-muted break-words [overflow-wrap:anywhere]">
                           {{ hardware.description || hardware.key }}
                         </div>
                       </div>
