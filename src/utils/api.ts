@@ -1,6 +1,10 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import type { RequestParams } from '@/generated/openapi';
+import type {
+  AuthMethodsResponse,
+  OIDCExchangeResponse as GeneratedOIDCExchangeResponse,
+  RequestParams,
+} from '@/generated/openapi';
 import {
   getToken,
   isTokenExpired,
@@ -154,20 +158,13 @@ export interface ApiResponse<T = unknown> {
   filters?: Record<string, unknown>;
 }
 
-export interface AuthMethods {
-  success: boolean;
-  local: boolean;
-  oidc: boolean;
-  oidc_provider_name?: string;
+export interface AuthMethods extends AuthMethodsResponse {
   error?: string;
 }
 
-export interface OidcExchangeResponse {
+export interface OidcExchangeResponse extends Partial<GeneratedOIDCExchangeResponse> {
   success: boolean;
-  token?: string;
   error?: string;
-  username?: string;
-  expires_in?: number;
 }
 
 // Configure the base API URL
@@ -192,16 +189,10 @@ async function refreshToken(): Promise<string> {
 
   isRefreshing = true;
   refreshPromise = (async () => {
+    const token = getToken();
     try {
-      const token = getToken();
       if (!token) {
         throw new Error('No token to refresh');
-      }
-
-      if (isOidcAuthenticated(token)) {
-        const appRuntime = useAppRuntimeStore();
-        await appRuntime.handleAuthFailure('reauthentication');
-        throw new Error('OIDC reauthentication required');
       }
 
       const clientId = getClientId();
@@ -220,19 +211,15 @@ async function refreshToken(): Promise<string> {
         const newToken = response.data.token;
         setToken(newToken);
         return newToken;
-      } else if (response.data.error === 'reauthentication_required') {
-        const appRuntime = useAppRuntimeStore();
-        await appRuntime.handleAuthFailure('reauthentication');
-        throw new Error('OIDC reauthentication required');
       } else {
         throw new Error('Token refresh failed');
       }
     } catch (error) {
       console.error('Token refresh error:', error);
-      if (!(error instanceof Error && error.message === 'OIDC reauthentication required')) {
-        const appRuntime = useAppRuntimeStore();
-        await appRuntime.handleAuthFailure('expired');
-      }
+      const appRuntime = useAppRuntimeStore();
+      await appRuntime.handleAuthFailure(
+        isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
+      );
       throw error;
     } finally {
       isRefreshing = false;
@@ -282,11 +269,6 @@ authClient.interceptors.request.use(
     if (token) {
       // Check if token should be refreshed
       if (shouldRefreshToken()) {
-        if (isOidcAuthenticated(token)) {
-          const appRuntime = useAppRuntimeStore();
-          void appRuntime.handleAuthFailure('reauthentication');
-          return Promise.reject(new Error('OIDC reauthentication required'));
-        }
         try {
           const newToken = await refreshToken();
           config.headers.Authorization = `Bearer ${newToken}`;
@@ -300,7 +282,9 @@ authClient.interceptors.request.use(
       // Check if token is expired
       if (isTokenExpired()) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure('expired');
+        void appRuntime.handleAuthFailure(
+          isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
+        );
         return Promise.reject(new Error('Token expired'));
       }
 
@@ -352,11 +336,6 @@ apiClient.interceptors.request.use(
     if (token) {
       // Check if token should be refreshed
       if (shouldRefreshToken()) {
-        if (isOidcAuthenticated(token)) {
-          const appRuntime = useAppRuntimeStore();
-          void appRuntime.handleAuthFailure('reauthentication');
-          return Promise.reject(new Error('OIDC reauthentication required'));
-        }
         try {
           const newToken = await refreshToken();
           config.headers.Authorization = `Bearer ${newToken}`;
@@ -370,7 +349,9 @@ apiClient.interceptors.request.use(
       // Check if token is expired
       if (isTokenExpired()) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure('expired');
+        void appRuntime.handleAuthFailure(
+          isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
+        );
         return Promise.reject(new Error('Token expired'));
       }
 
@@ -419,17 +400,14 @@ export class ApiService {
     }
 
     if (shouldRefreshToken()) {
-      if (isOidcAuthenticated(token)) {
-        const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure('reauthentication');
-        throw new Error('OIDC reauthentication required');
-      }
       return refreshToken();
     }
 
     if (isTokenExpired()) {
       const appRuntime = useAppRuntimeStore();
-      void appRuntime.handleAuthFailure('expired');
+      void appRuntime.handleAuthFailure(
+        isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
+      );
       throw new Error('Token expired');
     }
 
@@ -1488,7 +1466,7 @@ export async function exchangeOidcCode(
   clientId: string,
 ): Promise<OidcExchangeResponse> {
   const response = await authClient.post<OidcExchangeResponse>('/auth/oidc/exchange', {
-    oidc_exchange: oidcExchange,
+    code: oidcExchange,
     client_id: clientId,
   });
 

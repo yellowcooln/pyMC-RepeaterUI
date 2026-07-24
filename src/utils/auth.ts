@@ -139,6 +139,11 @@ export function startOidcLogin(
   navigate(buildOidcStartUrl(clientId, returnTo));
 }
 
+export function shouldRestartOidcLogin(reauth: unknown, oidcEnabled: boolean): boolean {
+  const value = Array.isArray(reauth) ? reauth[0] : reauth;
+  return oidcEnabled && value === 'oidc';
+}
+
 /**
  * Get time until token expiry in milliseconds
  */

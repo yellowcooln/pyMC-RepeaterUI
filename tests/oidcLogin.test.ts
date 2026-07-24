@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { defineComponent } from 'vue';
+import axios from 'axios';
 
 const TOKEN_KEY = 'pymc_jwt_token';
 const CLIENT_ID_KEY = 'pymc_client_id';
@@ -220,15 +221,27 @@ describe('OIDC browser flow', () => {
     );
   });
 
+  it('restarts OIDC only for an explicit reauthentication route with OIDC enabled', async () => {
+    const { shouldRestartOidcLogin } = await import('@/utils/auth');
+
+    expect(shouldRestartOidcLogin('oidc', true)).toBe(true);
+    expect(shouldRestartOidcLogin('oidc', false)).toBe(false);
+    expect(shouldRestartOidcLogin(['oidc'], true)).toBe(true);
+    expect(shouldRestartOidcLogin('local', true)).toBe(false);
+  });
+
   it('exchanges oidc_exchange, stores only the returned internal JWT, cleans history, and navigates home', async () => {
     mockAuthGet({ local: true, oidc: true, oidc_provider_name: 'Authentik' });
     exchangeOidcCodeMock.mockResolvedValue({ success: true, token: 'internal.jwt.token' });
 
-    const { router } = await mountLogin('/login?oidc_exchange=one-time-code');
+    const { router } = await mountLogin(
+      '/login?oidc_exchange=one-time-code&return_to=%2F%3Ftab%3Dconfiguration',
+    );
 
     expect(exchangeOidcCodeMock).toHaveBeenCalledWith('one-time-code', 'browser-client-1');
     expect(localStorage.getItem(TOKEN_KEY)).toBe('internal.jwt.token');
     expect(router.currentRoute.value.path).toBe('/');
+    expect(router.currentRoute.value.query.tab).toBe('configuration');
     expect(router.currentRoute.value.query.oidc_exchange).toBeUndefined();
   });
 
@@ -279,17 +292,25 @@ describe('OIDC session metadata behavior', () => {
     expect(isOidcAuthenticated()).toBe(true);
   });
 
-  it('does not refresh an OIDC token after backend requires reauthentication', async () => {
+  it('refreshes a still-valid OIDC session through the bounded backend refresh endpoint', async () => {
+    localStorage.setItem(CLIENT_ID_KEY, 'browser-client-1');
     const nearExpiryOidcToken = makeJWT({
       sub: 'alice',
       client_id: 'browser-client-1',
       auth_source: 'oidc',
+      session_exp: Math.floor(Date.now() / 1000) + 3600,
       exp: Math.floor(Date.now() / 1000) + 120,
     });
+    const refreshedOidcToken = makeJWT({
+      sub: 'alice',
+      client_id: 'browser-client-1',
+      auth_source: 'oidc',
+      session_exp: Math.floor(Date.now() / 1000) + 3600,
+      exp: Math.floor(Date.now() / 1000) + 900,
+    });
     localStorage.setItem(TOKEN_KEY, nearExpiryOidcToken);
-    authClientMock.get.mockResolvedValue({ data: { success: true } });
-    authClientMock.post.mockResolvedValue({
-      data: { success: false, error: 'reauthentication_required' },
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({
+      data: { success: true, token: refreshedOidcToken },
     });
 
     const { apiClient } = await import('@/utils/api');
@@ -306,9 +327,19 @@ describe('OIDC session metadata behavior', () => {
       (h: unknown) => h !== null,
     ) as RequestInterceptorHandler;
 
-    await expect(handler.fulfilled({ url: '/api/stats', headers: {} })).rejects.toThrow();
+    const result = (await handler.fulfilled({ url: '/api/stats', headers: {} })) as {
+      headers: Record<string, string>;
+    };
 
-    expect(spy).toHaveBeenCalledWith('reauthentication');
+    expect(post).toHaveBeenCalledWith(
+      '/auth/refresh',
+      { client_id: 'browser-client-1' },
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: `Bearer ${nearExpiryOidcToken}` }),
+      }),
+    );
+    expect(result.headers.Authorization).toBe(`Bearer ${refreshedOidcToken}`);
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('clears the local token before logout navigation', async () => {

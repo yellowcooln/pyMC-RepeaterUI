@@ -264,7 +264,13 @@
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LogIn } from '@lucide/vue';
-import { setToken, getClientId, normalizeReturnTo, startOidcLogin } from '@/utils/auth';
+import {
+  setToken,
+  getClientId,
+  normalizeReturnTo,
+  shouldRestartOidcLogin,
+  startOidcLogin,
+} from '@/utils/auth';
 import { authClient, exchangeOidcCode, fetchAuthMethods, type AuthMethods } from '@/utils/api';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue';
@@ -383,14 +389,14 @@ const normalizeViewportScale = async () => {
   await waitForLayoutTick();
 };
 
-const navigateToDashboard = async () => {
+const navigateToDashboard = async (returnTo = '/') => {
   // On mobile Safari, focused inputs may leave the visual viewport zoomed.
   // Reset zoom before route transition so the dashboard mounts at normal scale.
   blurActiveElement();
   await waitForLayoutTick();
   await normalizeViewportScale();
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  await router.replace('/');
+  await router.replace(normalizeReturnTo(returnTo));
   await waitForLayoutTick();
   window.dispatchEvent(new Event('resize'));
 };
@@ -452,6 +458,10 @@ const handleOidcExchange = async () => {
 
   oidcExchangeLoading.value = true;
   errorMessage.value = '';
+  const requestedReturnTo = route.query.return_to;
+  const returnTo = normalizeReturnTo(
+    Array.isArray(requestedReturnTo) ? requestedReturnTo[0] : requestedReturnTo,
+  );
 
   try {
     const loginData = await exchangeOidcCode(oidcExchange, getClientId());
@@ -460,7 +470,7 @@ const handleOidcExchange = async () => {
     if (loginData.success && loginData.token) {
       setToken(loginData.token);
       appRuntime.markAuthenticated();
-      await navigateToDashboard();
+      await navigateToDashboard(returnTo);
       return;
     }
 
@@ -504,6 +514,12 @@ onMounted(async () => {
   ]);
 
   await handleOidcExchange();
+  if (
+    !route.query.oidc_exchange &&
+    shouldRestartOidcLogin(route.query.reauth, authMethods.value.oidc)
+  ) {
+    handleOidcLogin();
+  }
 });
 
 const handleLogin = async () => {

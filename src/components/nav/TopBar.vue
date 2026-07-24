@@ -20,16 +20,6 @@ interface Emits {
   (e: 'toggleMobileSidebar'): void;
 }
 
-interface UpdateStatusResponse {
-  success?: boolean;
-  state?: string;
-  current_version?: string;
-  latest_version?: string;
-  has_update?: boolean;
-  error?: string | null;
-  rate_limit_until?: string | null;
-}
-
 const emit = defineEmits<Emits>();
 
 const systemStore = useSystemStore();
@@ -64,6 +54,16 @@ const updateInfo = ref<{
 
 const username = ref<string>(getUsername() || 'User');
 
+interface UpdateStatusResponse {
+  success: boolean;
+  state?: string;
+  current_version?: string;
+  latest_version?: string;
+  has_update?: boolean;
+  error?: string | null;
+  rate_limit_until?: string | null;
+}
+
 // Track specific contact types (keys from CONTACT_TYPE_MAP)
 const targetContactTypes = ['Chat Node', 'Repeater', 'Room Server'] as const;
 const _nameToKey: Record<string, string> = Object.fromEntries(
@@ -71,9 +71,7 @@ const _nameToKey: Record<string, string> = Object.fromEntries(
 );
 
 // Derived from neighborStore — keyed by contact type name for template compatibility
-const trackedNodes = computed<
-  Record<string, { id: number; node_name: string | null; last_seen: number }[]>
->(() => {
+const trackedNodes = computed<Record<string, { id: number; node_name: string | null; last_seen: number }[]>>(() => {
   const result: Record<string, { id: number; node_name: string | null; last_seen: number }[]> = {};
   for (const type of targetContactTypes) {
     const key = _nameToKey[type];
@@ -85,6 +83,7 @@ const loading = computed(() => neighborStore.isLoading);
 const lastUpdateTime = computed(() =>
   neighborStore.lastFetched ? new Date(neighborStore.lastFetched) : null,
 );
+
 
 // Check for updates via the backend API (server-side GitHub check)
 const checkForUpdates = async (force = false) => {
@@ -146,7 +145,6 @@ const handleVersionUpdated = (payload: {
 const handleLogout = () => {
   void appRuntime.stopSession('logout');
 };
-
 // Computed totals
 const totalTrackedNodes = computed(() => {
   const total = Object.values(trackedNodes.value).reduce((total, nodes) => total + nodes.length, 0);
@@ -221,7 +219,10 @@ const toggleMobileSidebar = () => {
   <div class="glass-card p-3 sm:p-6 mb-5 rounded-[20px] relative z-10">
     <div class="flex justify-between items-center">
       <div class="flex items-center gap-3">
-        <button @click="toggleMobileSidebar" class="lg:hidden topbar-icon-btn">
+        <button
+          @click="toggleMobileSidebar"
+          class="lg:hidden topbar-icon-btn"
+        >
           <svg
             class="w-5 h-5 text-content-secondary dark:text-content-primary"
             viewBox="0 0 20 20"
@@ -353,263 +354,291 @@ const toggleMobileSidebar = () => {
           </svg>
         </a>
         <div :ref="notif.wrapperRef">
-          <button :ref="notif.triggerRef" @click="notif.toggle()" class="topbar-icon-btn relative">
-            <svg
-              class="w-5 h-5 text-content-secondary dark:text-content-primary"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M12.5 14.1667V15C12.5 16.3807 11.3807 17.5 9.99998 17.5C8.61927 17.5 7.49998 16.3807 7.49998 15V14.1667M12.5 14.1667L7.49998 14.1667M12.5 14.1667H15.8333C16.2936 14.1667 16.6666 13.7936 16.6666 13.3333V12.845C16.6666 12.624 16.5788 12.4122 16.4225 12.2559L15.9969 11.8302C15.8921 11.7255 15.8333 11.5833 15.8333 11.4351V8.33333C15.8333 8.1863 15.828 8.04045 15.817 7.89674M7.49998 14.1667L4.16665 14.1668C3.70641 14.1668 3.33331 13.7934 3.33331 13.3332V12.8451C3.33331 12.6241 3.42118 12.4124 3.57745 12.2561L4.00307 11.8299C4.10781 11.7251 4.16665 11.5835 4.16665 11.4353V8.33331C4.16665 5.11167 6.77831 2.5 9.99998 2.5C10.593 2.5 11.1653 2.58848 11.7045 2.75297M15.817 7.89674C16.8223 7.32275 17.5 6.24051 17.5 5C17.5 3.15905 16.0076 1.66666 14.1666 1.66666C13.1914 1.66666 12.3141 2.08544 11.7045 2.75297M15.817 7.89674C15.3304 8.17457 14.7671 8.33333 14.1666 8.33333C12.3257 8.33333 10.8333 6.84095 10.8333 5C10.8333 4.13425 11.1634 3.34558 11.7045 2.75297M15.817 7.89674C15.817 7.89674 15.817 7.89675 15.817 7.89674ZM11.7045 2.75297C11.7049 2.75309 11.7053 2.75321 11.7057 2.75333"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span
-              v-if="showNotificationBadge"
-              class="absolute top-2 right-2 w-2 h-2 rounded-full"
-              :class="
-                updateInfo.hasUpdate
-                  ? 'bg-accent-red animate-pulse'
-                  : updateInfo.isChecking
-                    ? 'bg-secondary animate-pulse'
-                    : updateInfo.currentVersion
-                      ? 'bg-accent-green'
-                      : 'bg-content-muted/opacity-heavy'
-              "
-            ></span>
-          </button>
-          <Teleport to="body">
+        <button
+          :ref="notif.triggerRef"
+          @click="notif.toggle()"
+          class="topbar-icon-btn relative"
+        >
+          <svg
+            class="w-5 h-5 text-content-secondary dark:text-content-primary"
+            viewBox="0 0 20 20"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12.5 14.1667V15C12.5 16.3807 11.3807 17.5 9.99998 17.5C8.61927 17.5 7.49998 16.3807 7.49998 15V14.1667M12.5 14.1667L7.49998 14.1667M12.5 14.1667H15.8333C16.2936 14.1667 16.6666 13.7936 16.6666 13.3333V12.845C16.6666 12.624 16.5788 12.4122 16.4225 12.2559L15.9969 11.8302C15.8921 11.7255 15.8333 11.5833 15.8333 11.4351V8.33333C15.8333 8.1863 15.828 8.04045 15.817 7.89674M7.49998 14.1667L4.16665 14.1668C3.70641 14.1668 3.33331 13.7934 3.33331 13.3332V12.8451C3.33331 12.6241 3.42118 12.4124 3.57745 12.2561L4.00307 11.8299C4.10781 11.7251 4.16665 11.5835 4.16665 11.4353V8.33331C4.16665 5.11167 6.77831 2.5 9.99998 2.5C10.593 2.5 11.1653 2.58848 11.7045 2.75297M15.817 7.89674C16.8223 7.32275 17.5 6.24051 17.5 5C17.5 3.15905 16.0076 1.66666 14.1666 1.66666C13.1914 1.66666 12.3141 2.08544 11.7045 2.75297M15.817 7.89674C15.3304 8.17457 14.7671 8.33333 14.1666 8.33333C12.3257 8.33333 10.8333 6.84095 10.8333 5C10.8333 4.13425 11.1634 3.34558 11.7045 2.75297M15.817 7.89674C15.817 7.89674 15.817 7.89675 15.817 7.89674ZM11.7045 2.75297C11.7049 2.75309 11.7053 2.75321 11.7057 2.75333"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span
+            v-if="showNotificationBadge"
+            class="absolute top-2 right-2 w-2 h-2 rounded-full"
+            :class="
+              updateInfo.hasUpdate
+                ? 'bg-accent-red animate-pulse'
+                : updateInfo.isChecking
+                  ? 'bg-secondary animate-pulse'
+                  : updateInfo.currentVersion
+                    ? 'bg-accent-green'
+                    : 'bg-content-muted/opacity-heavy'
+            "
+          ></span>
+        </button>
+        <Teleport to="body">
+        <div
+          v-if="notif.isOpen.value"
+          :ref="notif.panelRef"
+          :style="notif.panelStyle.value"
+          class="fixed z-[250] w-80 bg-surface dark:bg-surface-elevated border border-stroke-subtle dark:border-stroke/opacity-medium rounded-[15px] p-4 shadow-2xl backdrop-blur-sm overflow-y-auto max-h-[calc(100vh-4rem)]"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-content-primary font-semibold">
+              System Status
+            </p>
+            <div class="flex items-center gap-2">
+              <button
+                @click="() => checkForUpdates()"
+                :disabled="updateInfo.isChecking"
+                class="text-xs text-primary hover:text-primary/opacity-heavy disabled:opacity-50"
+                title="Check for updates"
+              >
+                {{ updateInfo.isChecking ? 'Checking...' : 'Check Updates' }}
+              </button>
+              <span class="text-content-muted text-xs">•</span>
+              <button
+                @click="() => neighborStore.fetchAll()"
+                :disabled="loading"
+                class="text-xs text-primary hover:text-primary/opacity-heavy disabled:opacity-50"
+              >
+                {{ loading ? 'Updating...' : 'Refresh' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-sm">
+            <!-- Update Information -->
             <div
-              v-if="notif.isOpen.value"
-              :ref="notif.panelRef"
-              :style="notif.panelStyle.value"
-              class="fixed z-[250] w-80 bg-surface dark:bg-surface-elevated border border-stroke-subtle dark:border-stroke/opacity-medium rounded-[15px] p-4 shadow-2xl backdrop-blur-sm overflow-y-auto max-h-[calc(100vh-4rem)]"
+              v-if="updateInfo.hasUpdate"
+              class="bg-accent-red/opacity-light dark:bg-background-mute p-3 rounded-lg border border-accent-red/opacity-medium border-l-2 border-l-accent-red"
             >
-              <div class="flex items-center justify-between mb-3">
-                <p class="text-content-primary font-semibold">System Status</p>
-                <div class="flex items-center gap-2">
-                  <button
-                    @click="() => checkForUpdates()"
-                    :disabled="updateInfo.isChecking"
-                    class="text-xs text-primary hover:text-primary/opacity-heavy disabled:opacity-50"
-                    title="Check for updates"
-                  >
-                    {{ updateInfo.isChecking ? 'Checking...' : 'Check Updates' }}
-                  </button>
-                  <span class="text-content-muted text-xs">•</span>
-                  <button
-                    @click="() => neighborStore.fetchAll()"
-                    :disabled="loading"
-                    class="text-xs text-primary hover:text-primary/opacity-heavy disabled:opacity-50"
-                  >
-                    {{ loading ? 'Updating...' : 'Refresh' }}
-                  </button>
-                </div>
+              <div class="flex items-center justify-between">
+                <span class="text-content-primary font-medium"
+                  >Update Available</span
+                >
+                <span class="text-accent-red font-bold">{{ updateInfo.latestVersion }}</span>
               </div>
-
-              <div class="space-y-3 text-sm">
-                <!-- Update Information -->
-                <div
-                  v-if="updateInfo.hasUpdate"
-                  class="bg-accent-red/opacity-light dark:bg-background-mute p-3 rounded-lg border border-accent-red/opacity-medium border-l-2 border-l-accent-red"
+              <div class="text-xs text-content-muted mt-1">
+                Current: {{ updateInfo.currentVersion }}
+              </div>
+              <div class="mt-2 flex items-center gap-2">
+                <button
+                  @click="
+                    showUpdateModal = true;
+                    notif.close();
+                  "
+                  class="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-accent-red/opacity-medium hover:bg-accent-red/opacity-medium border border-accent-red/opacity-heavy text-accent-red"
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="text-content-primary font-medium">Update Available</span>
-                    <span class="text-accent-red font-bold">{{ updateInfo.latestVersion }}</span>
-                  </div>
-                  <div class="text-xs text-content-muted mt-1">
-                    Current: {{ updateInfo.currentVersion }}
-                  </div>
-                  <div class="mt-2 flex items-center gap-2">
-                    <button
-                      @click="
-                        showUpdateModal = true;
-                        notif.close();
-                      "
-                      class="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors bg-accent-red/opacity-medium hover:bg-accent-red/opacity-medium border border-accent-red/opacity-heavy text-accent-red"
-                    >
-                      Install Update
-                    </button>
-                    <a
-                      href="https://github.com/openhop-dev/openhop-repeater"
-                      target="_blank"
-                      class="text-xs text-content-muted hover:text-content-secondary underline"
-                    >
-                      View on GitHub
-                    </a>
-                    <button
-                      @click="checkForUpdates(true)"
-                      :disabled="updateInfo.isChecking"
-                      class="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50 transition-colors ml-auto"
-                    >
-                      {{ updateInfo.isChecking ? 'Checking…' : 'Re-check' }}
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Rate limit warning in dropdown -->
-                <div
-                  v-if="updateInfo.rateLimitUntil && !updateInfo.isChecking"
-                  class="flex items-start gap-2 bg-accent-amber/opacity-light dark:bg-accent-amber/opacity-light border border-accent-amber dark:border-accent-amber/opacity-medium border-l-2 border-l-amber-500 rounded-lg p-3 text-xs text-accent-amber"
+                  Install Update
+                </button>
+                <a
+                  href="https://github.com/openhop-dev/openhop-repeater"
+                  target="_blank"
+                  class="text-xs text-content-muted hover:text-content-secondary underline"
                 >
-                  <svg
-                    class="w-3.5 h-3.5 shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                    />
-                  </svg>
-                  <span
-                    >GitHub API rate limit reached. Version check paused until
-                    {{
-                      new Date(updateInfo.rateLimitUntil).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    }}.</span
-                  >
-                </div>
-
-                <!-- Version Information (when no update) -->
-                <div
-                  v-else-if="updateInfo.currentVersion && !updateInfo.isChecking"
-                  class="bg-accent-green/opacity-light dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light border-l-2 border-l-accent-green"
+                  View on GitHub
+                </a>
+                <button
+                  @click="checkForUpdates(true)"
+                  :disabled="updateInfo.isChecking"
+                  class="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50 transition-colors ml-auto"
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="text-content-primary font-medium">Up to Date</span>
-                    <span class="text-accent-green font-bold">{{ updateInfo.currentVersion }}</span>
-                  </div>
-                  <div v-if="updateInfo.lastChecked" class="text-xs text-content-muted mt-1">
-                    Last checked: {{ updateInfo.lastChecked.toLocaleTimeString() }}
-                  </div>
-                  <div class="mt-2 flex items-center gap-2">
-                    <button
-                      @click="
-                        showUpdateModal = true;
-                        notif.close();
-                      "
-                      class="text-xs bg-primary/opacity-light hover:bg-primary/opacity-medium text-primary px-3 py-1.5 rounded-lg font-medium transition-colors"
-                    >
-                      Manage / Switch Branch
-                    </button>
-                    <button
-                      @click="checkForUpdates(true)"
-                      :disabled="updateInfo.isChecking"
-                      class="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50 transition-colors"
-                    >
-                      {{ updateInfo.isChecking ? 'Checking…' : 'Check Now' }}
-                    </button>
-                  </div>
-                </div>
+                  {{ updateInfo.isChecking ? 'Checking…' : 'Re-check' }}
+                </button>
+              </div>
+            </div>
 
-                <!-- Update Check Loading -->
-                <div
-                  v-else-if="updateInfo.isChecking"
-                  class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light"
+            <!-- Rate limit warning in dropdown -->
+            <div
+              v-if="updateInfo.rateLimitUntil && !updateInfo.isChecking"
+              class="flex items-start gap-2 bg-accent-amber/opacity-light dark:bg-accent-amber/opacity-light border border-accent-amber dark:border-accent-amber/opacity-medium border-l-2 border-l-amber-500 rounded-lg p-3 text-xs text-accent-amber"
+            >
+              <svg
+                class="w-3.5 h-3.5 shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                />
+              </svg>
+              <span
+                >GitHub API rate limit reached. Version check paused until
+                {{
+                  new Date(updateInfo.rateLimitUntil).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                }}.</span
+              >
+            </div>
+
+            <!-- Version Information (when no update) -->
+            <div
+              v-else-if="updateInfo.currentVersion && !updateInfo.isChecking"
+              class="bg-accent-green/opacity-light dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light border-l-2 border-l-accent-green"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-content-primary font-medium"
+                  >Up to Date</span
                 >
-                  <div class="flex items-center justify-center gap-2">
-                    <Spinner size="sm" />
-                    <span class="text-content-secondary">Checking for updates...</span>
-                  </div>
-                </div>
-
-                <!-- Update Check Error -->
-                <div
-                  v-else-if="updateInfo.error"
-                  class="bg-accent-red/opacity-light dark:bg-background-mute p-3 rounded-lg border border-accent-red/opacity-medium border-l-2 border-l-accent-red"
+                <span class="text-accent-green font-bold">{{ updateInfo.currentVersion }}</span>
+              </div>
+              <div
+                v-if="updateInfo.lastChecked"
+                class="text-xs text-content-muted mt-1"
+              >
+                Last checked: {{ updateInfo.lastChecked.toLocaleTimeString() }}
+              </div>
+              <div class="mt-2 flex items-center gap-2">
+                <button
+                  @click="
+                    showUpdateModal = true;
+                    notif.close();
+                  "
+                  class="text-xs bg-primary/opacity-light hover:bg-primary/opacity-medium text-primary px-3 py-1.5 rounded-lg font-medium transition-colors"
                 >
-                  <div class="text-content-primary font-medium mb-1">Update Check Failed</div>
-                  <div class="text-xs text-content-secondary dark:text-content-muted">
-                    {{ updateInfo.error }}
-                  </div>
-                </div>
-
-                <!-- Separator -->
-                <div class="border-t border-stroke-subtle dark:border-stroke/opacity-light"></div>
-
-                <!-- Mesh Network Status Header -->
-                <div class="text-content-primary font-medium text-sm mb-2">Mesh Network Status</div>
-
-                <!-- Tracking Summary -->
-                <div
-                  class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light border-l-2 border-l-primary"
+                  Manage / Switch Branch
+                </button>
+                <button
+                  @click="checkForUpdates(true)"
+                  :disabled="updateInfo.isChecking"
+                  class="text-xs text-content-muted hover:text-content-secondary disabled:opacity-50 transition-colors"
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="text-content-primary font-medium">Total Tracked Nodes</span>
-                    <span class="text-primary font-bold">{{ totalTrackedNodes }}</span>
-                  </div>
-                  <div v-if="lastUpdateTime" class="text-xs text-content-muted mt-1">
-                    Last updated: {{ lastUpdateTime.toLocaleString() }}
-                  </div>
-                </div>
+                  {{ updateInfo.isChecking ? 'Checking…' : 'Check Now' }}
+                </button>
+              </div>
+            </div>
 
-                <!-- Breakdown by type -->
-                <div
-                  v-for="item in trackedBreakdown"
-                  :key="item.type"
-                  class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light"
+            <!-- Update Check Loading -->
+            <div
+              v-else-if="updateInfo.isChecking"
+              class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light"
+            >
+              <div class="flex items-center justify-center gap-2">
+                <Spinner size="sm" />
+                <span class="text-content-secondary"
+                  >Checking for updates...</span
                 >
-                  <div class="flex items-center justify-between">
-                    <span class="text-content-primary font-medium"
-                      >{{ item.type }}{{ item.count === 1 ? '' : 's' }}</span
-                    >
-                    <span :class="getContactTypeColor(item.type)" class="font-bold">{{
-                      item.count
-                    }}</span>
-                  </div>
-                  <div v-if="trackedNodes[item.type]?.length > 0" class="mt-2">
-                    <div class="text-xs text-content-muted">
-                      Latest:
-                      <span class="text-content-secondary">{{ getLatestNodeName(item.type) }}</span>
-                    </div>
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                <!-- Empty state -->
-                <div
-                  v-if="totalTrackedNodes === 0 && !loading"
-                  class="bg-background-mute dark:bg-background-mute p-4 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light text-center"
-                >
-                  <div class="text-content-secondary dark:text-content-muted">
-                    <svg
-                      class="w-8 h-8 mx-auto mb-2 opacity-50"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.034 0-3.9.785-5.291 2.09M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
-                    <span>No mesh nodes detected</span>
-                  </div>
-                </div>
+            <!-- Update Check Error -->
+            <div
+              v-else-if="updateInfo.error"
+              class="bg-accent-red/opacity-light dark:bg-background-mute p-3 rounded-lg border border-accent-red/opacity-medium border-l-2 border-l-accent-red"
+            >
+              <div class="text-content-primary font-medium mb-1">
+                Update Check Failed
+              </div>
+              <div class="text-xs text-content-secondary dark:text-content-muted">
+                {{ updateInfo.error }}
+              </div>
+            </div>
 
-                <!-- Error or loading states -->
-                <div
-                  v-if="loading"
-                  class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light text-center"
+            <!-- Separator -->
+            <div class="border-t border-stroke-subtle dark:border-stroke/opacity-light"></div>
+
+            <!-- Mesh Network Status Header -->
+            <div class="text-content-primary font-medium text-sm mb-2">
+              Mesh Network Status
+            </div>
+
+            <!-- Tracking Summary -->
+            <div
+              class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light border-l-2 border-l-primary"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-content-primary font-medium"
+                  >Total Tracked Nodes</span
                 >
-                  <div class="flex items-center justify-center gap-2">
-                    <Spinner size="sm" />
-                    <span class="text-content-secondary">Scanning mesh network...</span>
-                  </div>
+                <span class="text-primary font-bold">{{ totalTrackedNodes }}</span>
+              </div>
+              <div
+                v-if="lastUpdateTime"
+                class="text-xs text-content-muted mt-1"
+              >
+                Last updated: {{ lastUpdateTime.toLocaleString() }}
+              </div>
+            </div>
+
+            <!-- Breakdown by type -->
+            <div
+              v-for="item in trackedBreakdown"
+              :key="item.type"
+              class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-content-primary font-medium"
+                  >{{ item.type }}{{ item.count === 1 ? '' : 's' }}</span
+                >
+                <span :class="getContactTypeColor(item.type)" class="font-bold">{{
+                  item.count
+                }}</span>
+              </div>
+              <div v-if="trackedNodes[item.type]?.length > 0" class="mt-2">
+                <div class="text-xs text-content-muted">
+                  Latest:
+                  <span class="text-content-secondary">{{
+                    getLatestNodeName(item.type)
+                  }}</span>
                 </div>
               </div>
             </div>
-          </Teleport>
+
+            <!-- Empty state -->
+            <div
+              v-if="totalTrackedNodes === 0 && !loading"
+              class="bg-background-mute dark:bg-background-mute p-4 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light text-center"
+            >
+              <div class="text-content-secondary dark:text-content-muted">
+                <svg
+                  class="w-8 h-8 mx-auto mb-2 opacity-50"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.034 0-3.9.785-5.291 2.09M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+                <span>No mesh nodes detected</span>
+              </div>
+            </div>
+
+            <!-- Error or loading states -->
+            <div
+              v-if="loading"
+              class="bg-background-mute dark:bg-background-mute p-3 rounded-lg border border-stroke-subtle dark:border-stroke/opacity-light text-center"
+            >
+              <div class="flex items-center justify-center gap-2">
+                <Spinner size="sm" />
+                <span class="text-content-secondary"
+                  >Scanning mesh network...</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        </Teleport>
         </div>
 
         <!-- Theme Toggle -->
@@ -638,83 +667,70 @@ const toggleMobileSidebar = () => {
             </svg>
           </button>
           <Teleport to="body">
-            <div
-              v-if="userMenu.isOpen.value"
-              :ref="userMenu.panelRef"
-              :style="userMenu.panelStyle.value"
-              class="fixed z-[250] w-48 bg-surface dark:bg-surface-elevated border border-stroke-subtle dark:border-stroke/opacity-medium rounded-xl shadow-2xl p-1"
+          <div
+            v-if="userMenu.isOpen.value"
+            :ref="userMenu.panelRef"
+            :style="userMenu.panelStyle.value"
+            class="fixed z-[250] w-48 bg-surface dark:bg-surface-elevated border border-stroke-subtle dark:border-stroke/opacity-medium rounded-xl shadow-2xl p-1"
+          >
+            <button
+              v-if="canChangePassword"
+              @click="showChangePasswordModal = true; userMenu.close()"
+              class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-content-primary rounded-lg transition-colors"
             >
-              <button
-                v-if="canChangePassword"
-                @click="
-                  showChangePasswordModal = true;
-                  userMenu.close();
-                "
-                class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-content-primary rounded-lg transition-colors"
+              <svg
+                class="w-4 h-4 text-content-secondary"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"
               >
-                <svg
-                  class="w-4 h-4 text-content-secondary"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>Change Password</span>
+            </button>
+            <div class="border-t border-stroke-subtle dark:border-stroke/opacity-heavy my-1 mx-2"></div>
+            <button
+              @click="showRestartModal = true; userMenu.close()"
+              class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-content-primary rounded-lg transition-colors"
+            >
+              <svg
+                class="w-4 h-4 text-content-secondary"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M3.5 2.5V7H8" stroke-linecap="round" stroke-linejoin="round" />
+                <path
+                  d="M4.5 12.5A6.5 6.5 0 1 0 5 6L3.5 7"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span>Change Password</span>
-              </button>
-              <div
-                v-if="canChangePassword"
-                class="border-t border-stroke-subtle dark:border-stroke/opacity-heavy my-1 mx-2"
-              ></div>
-              <button
-                @click="
-                  showRestartModal = true;
-                  userMenu.close();
-                "
-                class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-content-primary rounded-lg transition-colors"
+                />
+              </svg>
+              <span>Restart Service</span>
+            </button>
+            <button
+              @click="handleLogout"
+              class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-accent-red rounded-lg transition-colors"
+            >
+              <svg
+                class="w-4 h-4"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                xmlns="http://www.w3.org/2000/svg"
               >
-                <svg
-                  class="w-4 h-4 text-content-secondary"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path d="M3.5 2.5V7H8" stroke-linecap="round" stroke-linejoin="round" />
-                  <path
-                    d="M4.5 12.5A6.5 6.5 0 1 0 5 6L3.5 7"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <span>Restart Service</span>
-              </button>
-              <button
-                @click="handleLogout"
-                class="user-menu-item w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-accent-red rounded-lg transition-colors"
-              >
-                <svg
-                  class="w-4 h-4"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M13 3H15C16.1046 3 17 3.89543 17 5V15C17 16.1046 16.1046 17 15 17H13M8 7L4 10.5M4 10.5L8 14M4 10.5H13"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <span>Logout</span>
-              </button>
-            </div>
+                <path
+                  d="M13 3H15C16.1046 3 17 3.89543 17 5V15C17 16.1046 16.1046 17 15 17H13M8 7L4 10.5M4 10.5L8 14M4 10.5H13"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span>Logout</span>
+            </button>
+          </div>
           </Teleport>
         </div>
       </div>
@@ -751,7 +767,7 @@ const toggleMobileSidebar = () => {
     message="The service will restart. You will be automatically returned to the dashboard when it comes back online."
   />
   <ChangePasswordModal
-    :is-open="canChangePassword && showChangePasswordModal"
+    :is-open="showChangePasswordModal"
     :can-skip="false"
     @close="showChangePasswordModal = false"
     @success="showChangePasswordModal = false"
@@ -773,10 +789,6 @@ const toggleMobileSidebar = () => {
 <style scoped>
 /* Simple z-index fix for notification dropdown */
 
-.user-menu-item:hover span {
-  text-shadow: var(--nav-hover-label-shadow);
-}
-.user-menu-item:hover svg {
-  filter: var(--nav-hover-icon-shadow);
-}
+.user-menu-item:hover span { text-shadow: var(--nav-hover-label-shadow); }
+.user-menu-item:hover svg  { filter: var(--nav-hover-icon-shadow); }
 </style>
