@@ -105,4 +105,26 @@ describe('Login form — iOS autofill contract', () => {
     const passwordInput = wrapper.find('input[name="password"]')
     expect(passwordInput.attributes('autocomplete')).toBe('current-password')
   })
+
+  it('GitHub button links to the openHop Repeater repository', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/login', component: defineComponent({ template: '<div/>' }) }],
+    })
+    router.push('/login')
+    await router.isReady()
+
+    const { default: Login } = await import('@/views/Login.vue')
+    const wrapper = mount(Login, {
+      global: {
+        plugins: [router],
+        stubs: { ChangePasswordModal: true, ThemeToggle: true, GitHubIcon: true, CoffeeIcon: true, Spinner: true },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('a[title="GitHub"]').attributes('href')).toBe(
+      'https://github.com/openhop-dev/openhop_repeater',
+    )
+  })
 })

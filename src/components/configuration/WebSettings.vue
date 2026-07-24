@@ -3,8 +3,12 @@
     <!-- Page Heading -->
     <div class="cfg-page-heading flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div>
-        <h3 class="text-base sm:text-lg font-semibold text-content-primary mb-1 sm:mb-2">Web Options</h3>
-        <p class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">Configure site identification, CORS policy and web frontend selection</p>
+        <h3 class="text-base sm:text-lg font-semibold text-content-primary mb-1 sm:mb-2">
+          Web Options
+        </h3>
+        <p class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">
+          Configure site identification, CORS policy and web frontend selection
+        </p>
       </div>
     </div>
 
@@ -13,10 +17,10 @@
       v-if="showSwitchingPopup"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
-      <div class="glass-card w-full max-w-md rounded-[15px] p-6 space-y-3 border border-accent-cyan/opacity-medium">
-        <h4 class="text-base font-semibold text-content-primary">
-          Changing web interface
-        </h4>
+      <div
+        class="glass-card w-full max-w-md rounded-[15px] p-6 space-y-3 border border-accent-cyan/opacity-medium"
+      >
+        <h4 class="text-base font-semibold text-content-primary">Changing web interface</h4>
         <p class="text-sm text-content-secondary dark:text-content-muted">
           The web interface is switching now and this page will refresh automatically.
         </p>
@@ -27,20 +31,15 @@
     <div class="cfg-section">
       <div class="flex items-start justify-between mb-4">
         <div>
-          <h3 class="text-lg font-semibold text-content-primary mb-1">
-            Site Identification
-          </h3>
+          <h3 class="text-lg font-semibold text-content-primary mb-1">Site Identification</h3>
           <p class="text-sm text-content-secondary dark:text-content-muted">
-            Customise the browser tab title and login page caption
+            Customise the browser tab title, login page caption and shared-link preview
           </p>
         </div>
       </div>
       <div class="space-y-4">
         <div>
-          <label
-            for="site-name"
-            class="block text-sm font-medium text-content-primary mb-2"
-          >
+          <label for="site-name" class="block text-sm font-medium text-content-primary mb-2">
             Site Name
           </label>
           <input
@@ -54,7 +53,8 @@
             :disabled="saving"
           />
           <p class="text-xs text-content-secondary dark:text-content-muted mt-1.5">
-            Shown in the browser tab and above the login form. Leave blank to use the default title.
+            Shown in the browser tab, above the login form and in Discord or other link previews.
+            Leave blank to use the repeater node name for previews and the default interface title.
           </p>
         </div>
       </div>
@@ -64,9 +64,7 @@
     <div class="cfg-section">
       <div class="flex items-start justify-between mb-4">
         <div>
-          <h3 class="text-lg font-semibold text-content-primary mb-1">
-            CORS Settings
-          </h3>
+          <h3 class="text-lg font-semibold text-content-primary mb-1">CORS Settings</h3>
           <p class="text-sm text-content-secondary dark:text-content-muted">
             Control cross-origin resource sharing for API access
           </p>
@@ -77,9 +75,7 @@
         <!-- CORS Enabled Toggle -->
         <div class="flex items-center justify-between">
           <div>
-            <label class="text-sm font-medium text-content-primary"
-              >Enable CORS</label
-            >
+            <label class="text-sm font-medium text-content-primary">Enable CORS</label>
             <p class="text-xs text-content-secondary dark:text-content-muted mt-1">
               Allow web frontends from different origins to access the API
             </p>
@@ -110,9 +106,7 @@
     <div class="cfg-section">
       <div class="flex items-start justify-between mb-4">
         <div>
-          <h3 class="text-lg font-semibold text-content-primary mb-1">
-            Web Frontend
-          </h3>
+          <h3 class="text-lg font-semibold text-content-primary mb-1">Web Frontend</h3>
           <p class="text-sm text-content-secondary dark:text-content-muted">
             Choose which web interface to use
           </p>
@@ -140,15 +134,11 @@
               class="mt-1 h-4 w-4 text-accent-cyan focus:ring-accent-cyan focus:ring-offset-background"
             />
             <div class="flex-1">
-              <div class="text-sm font-medium text-content-primary">
-                Default Frontend
-              </div>
+              <div class="text-sm font-medium text-content-primary">Default Frontend</div>
               <div class="text-xs text-content-secondary dark:text-content-muted mt-1">
                 Built-in Repeater web interface
               </div>
-              <div class="text-xs text-content-muted/opacity-heavy mt-1 font-mono">
-                Built-in
-              </div>
+              <div class="text-xs text-content-muted/opacity-heavy mt-1 font-mono">Built-in</div>
             </div>
           </label>
 
@@ -172,9 +162,7 @@
             />
             <div class="flex-1">
               <div class="flex items-center justify-between">
-                <div class="text-sm font-medium text-content-primary">
-                  openHop Console
-                </div>
+                <div class="text-sm font-medium text-content-primary">openHop Console</div>
                 <span
                   class="text-xs bg-accent-amber/opacity-light text-accent-amber px-2 py-0.5 rounded-full border border-accent-amber/opacity-medium font-medium"
                   >@Treehouse⚡</span
@@ -264,7 +252,6 @@
             </div>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -299,12 +286,9 @@
             d="M6 18L18 6M6 6l12 12"
           />
         </svg>
-        <span
-          :class="
-            saveSuccess ? 'text-accent-green' : 'text-accent-red'
-          "
-          >{{ saveMessage }}</span
-        >
+        <span :class="saveSuccess ? 'text-accent-green' : 'text-accent-red'">{{
+          saveMessage
+        }}</span>
       </div>
     </div>
   </div>
@@ -322,6 +306,19 @@ interface WebConfig {
   cors_enabled: boolean;
   use_default_frontend: boolean;
   site_name: string;
+}
+
+interface StoredWebConfig {
+  cors_enabled?: boolean;
+  web_path?: string | null;
+}
+
+interface WebConfigUpdate {
+  web: {
+    cors_enabled: boolean;
+    site_name: string;
+    web_path?: string | null;
+  };
 }
 
 const { stats } = storeToRefs(useSystemStore());
@@ -361,7 +358,8 @@ async function checkPymcConsole() {
 }
 
 function loadSettings() {
-  const webConfig = (stats.value?.config as any)?.web || {};
+  const config = stats.value?.config as { web?: StoredWebConfig } | undefined;
+  const webConfig = config?.web || {};
   localConfig.cors_enabled = webConfig.cors_enabled === true;
   const webPath = webConfig.web_path;
   localConfig.use_default_frontend = !webPath || webPath === '';
@@ -373,7 +371,7 @@ async function saveSettings() {
   saveMessage.value = '';
 
   try {
-    const updates: any = {
+    const updates: WebConfigUpdate = {
       web: {
         cors_enabled: localConfig.cors_enabled,
         site_name: localConfig.site_name.trim(),
@@ -408,9 +406,9 @@ async function saveSettings() {
     } else {
       showMessage(response.error || 'Failed to save settings', false);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to save web settings:', error);
-    showMessage(error.message || 'Failed to save settings', false);
+    showMessage(error instanceof Error ? error.message : 'Failed to save settings', false);
   } finally {
     saving.value = false;
   }

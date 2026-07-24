@@ -226,7 +226,7 @@
           </div>
           <div class="flex items-center justify-center gap-3">
             <a
-              href="https://github.com/rightup"
+              href="https://github.com/openhop-dev/openhop_repeater"
               target="_blank"
               class="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm"
               title="GitHub"
