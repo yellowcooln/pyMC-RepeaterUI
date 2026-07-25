@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { isAuthenticated } from '@/utils/auth';
+import { summarizeApiError } from '@/utils/safeError';
 
 // Lazy-load all views for faster initial load
 const router = createRouter({
@@ -138,7 +139,7 @@ async function checkSetupStatus() {
     if (!needsSetup) _setupComplete = true;
     return needsSetup;
   } catch (error) {
-    console.error('Error checking setup status:', error);
+    console.error('Error checking setup status:', summarizeApiError(error));
     return false;
   }
 }

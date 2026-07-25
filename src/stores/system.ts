@@ -1,24 +1,75 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watchEffect } from 'vue';
-import ApiService, { apiClient } from '@/utils/api';
+import ApiService, { apiClient, summarizeApiError } from '@/utils/api';
 import type { SystemStats } from '@/types/api';
 import { usePacketStore } from './packets';
 
 const CONFIG_CACHE_KEY = 'pymc_config_cache';
 
-function loadConfigCache(): SystemStats['config'] | null {
+export function sanitizeConfigForCache(
+  config: SystemStats['config'],
+): SystemStats['config'] | null {
+  if (!config) return null;
+
+  const cached: NonNullable<SystemStats['config']> = {};
+  if (typeof config.node_name === 'string') cached.node_name = config.node_name;
+  if (typeof config.radio_type === 'string') cached.radio_type = config.radio_type;
+
+  const repeater = config.repeater;
+  if (repeater) {
+    const safeRepeater: NonNullable<NonNullable<SystemStats['config']>['repeater']> = {};
+    if (repeater.mode === 'forward' || repeater.mode === 'monitor' || repeater.mode === 'no_tx') {
+      safeRepeater.mode = repeater.mode;
+    }
+    if (typeof repeater.latitude === 'number') safeRepeater.latitude = repeater.latitude;
+    if (typeof repeater.longitude === 'number') safeRepeater.longitude = repeater.longitude;
+    if (Object.keys(safeRepeater).length) cached.repeater = safeRepeater;
+  }
+
+  const dutyCycle = config.duty_cycle;
+  if (dutyCycle) {
+    const safeDutyCycle: NonNullable<NonNullable<SystemStats['config']>['duty_cycle']> = {};
+    if (typeof dutyCycle.enforcement_enabled === 'boolean') {
+      safeDutyCycle.enforcement_enabled = dutyCycle.enforcement_enabled;
+    }
+    const maxAirtime = dutyCycle.max_airtime_percent;
+    if (typeof maxAirtime === 'number') {
+      safeDutyCycle.max_airtime_percent = maxAirtime;
+    } else if (
+      maxAirtime &&
+      typeof maxAirtime === 'object' &&
+      typeof maxAirtime.parsedValue === 'number'
+    ) {
+      safeDutyCycle.max_airtime_percent = { parsedValue: maxAirtime.parsedValue };
+    }
+    if (Object.keys(safeDutyCycle).length) cached.duty_cycle = safeDutyCycle;
+  }
+
+  return cached;
+}
+
+export function loadConfigCache(): SystemStats['config'] | null {
   try {
     const raw = sessionStorage.getItem(CONFIG_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as SystemStats['config']) : null;
+    if (!raw) return null;
+    const safeConfig = sanitizeConfigForCache(JSON.parse(raw) as SystemStats['config']);
+    if (safeConfig) {
+      sessionStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(safeConfig));
+    } else {
+      sessionStorage.removeItem(CONFIG_CACHE_KEY);
+    }
+    return safeConfig;
   } catch {
+    sessionStorage.removeItem(CONFIG_CACHE_KEY);
     return null;
   }
 }
 
 function saveConfigCache(config: SystemStats['config']) {
-  if (!config) return;
+  const safeConfig = sanitizeConfigForCache(config);
+  if (!safeConfig) return;
   try {
-    sessionStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
+    sessionStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(safeConfig));
   } catch {}
 }
 
@@ -182,7 +233,7 @@ export const useSystemStore = defineStore('system', () => {
         return statsData;
       } catch (err) {
         error.value = err instanceof Error ? err.message : 'Unknown error occurred';
-        console.error('Error fetching stats:', err);
+        console.error('Error fetching stats:', summarizeApiError(err));
         throw err;
       } finally {
         isLoading.value = false;
@@ -246,7 +297,7 @@ export const useSystemStore = defineStore('system', () => {
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error setting mode:', err);
+      console.error('Error setting mode:', summarizeApiError(err));
       throw err;
     }
   }
@@ -266,7 +317,7 @@ export const useSystemStore = defineStore('system', () => {
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error setting duty cycle:', err);
+      console.error('Error setting duty cycle:', summarizeApiError(err));
       throw err;
     }
   }
@@ -291,7 +342,7 @@ export const useSystemStore = defineStore('system', () => {
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error sending advert:', err);
+      console.error('Error sending advert:', summarizeApiError(err));
       throw err;
     }
   }
@@ -335,7 +386,7 @@ export const useSystemStore = defineStore('system', () => {
         try {
           await fetchStats();
         } catch (err) {
-          console.error('Auto-refresh error:', err);
+          console.error('Auto-refresh error:', summarizeApiError(err));
         }
       }, intervalMs);
     }

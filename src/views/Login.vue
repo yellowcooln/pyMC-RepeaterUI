@@ -271,7 +271,13 @@ import {
   shouldRestartOidcLogin,
   startOidcLogin,
 } from '@/utils/auth';
-import { authClient, exchangeOidcCode, fetchAuthMethods, type AuthMethods } from '@/utils/api';
+import {
+  authClient,
+  exchangeOidcCode,
+  fetchAuthMethods,
+  summarizeApiError,
+  type AuthMethods,
+} from '@/utils/api';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue';
 import Spinner from '@/components/ui/Spinner.vue';
@@ -565,7 +571,7 @@ const handleLogin = async () => {
       errorMessage.value = loginData.error || 'Login failed';
     }
   } catch (error: unknown) {
-    console.error('Login error:', error);
+    console.error('Login error:', summarizeApiError(error));
     const err = error as {
       response?: {
         status?: number;

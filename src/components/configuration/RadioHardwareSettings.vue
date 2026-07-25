@@ -88,6 +88,8 @@ const pymcUsbBaudRate = ref(921600);
 const pymcTcpHost = ref('');
 const pymcTcpPort = ref(5055);
 const pymcTcpToken = ref('');
+const pymcTcpTokenConfigured = ref(false);
+const clearPymcTcpToken = ref(false);
 
 const sxBusId = ref(0);
 const sxCsId = ref(0);
@@ -193,7 +195,9 @@ watch(
 
       pymcTcpHost.value = asString(pymcTcp.host, '');
       pymcTcpPort.value = asNumber(pymcTcp.port, 5055);
-      pymcTcpToken.value = asString(pymcTcp.token, '');
+      pymcTcpToken.value = '';
+      pymcTcpTokenConfigured.value = pymcTcp.token_configured === true;
+      clearPymcTcpToken.value = false;
 
       sxBusId.value = asNumber(sx.bus_id, 0);
       sxCsId.value = asNumber(sx.cs_id, 0);
@@ -232,6 +236,8 @@ const currentRadioTypeLabel = computed(() => {
 
 function startEditing() {
   selectedRadioType.value = currentRadioType.value;
+  pymcTcpToken.value = '';
+  clearPymcTcpToken.value = false;
   isEditing.value = true;
   errorMessage.value = '';
 }
@@ -242,6 +248,8 @@ function cancelEditing() {
   errorMessage.value = '';
   useCustomSerialPath.value = false;
   selectedBoardPresetKey.value = '';
+  pymcTcpToken.value = '';
+  clearPymcTcpToken.value = false;
 }
 
 function parseEnPins(input: string): number[] {
@@ -330,11 +338,16 @@ async function saveChanges(): Promise<boolean> {
     }
 
     if (selectedRadioType.value === 'pymc_tcp') {
-      payload.pymc_tcp = {
+      const pymcTcpConfig: Record<string, unknown> = {
         host: pymcTcpHost.value.trim(),
         port: asNumber(pymcTcpPort.value, 5055),
-        token: pymcTcpToken.value,
       };
+      if (clearPymcTcpToken.value) {
+        pymcTcpConfig.token = '';
+      } else if (pymcTcpToken.value.trim()) {
+        pymcTcpConfig.token = pymcTcpToken.value;
+      }
+      payload.pymc_tcp = pymcTcpConfig;
     }
 
     if (selectedRadioType.value === 'sx1262' || selectedRadioType.value === 'sx1262_ch341') {
@@ -653,15 +666,25 @@ watch(
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-stroke-subtle dark:border-stroke/opacity-light gap-2">
           <span class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">TCP Token</span>
           <div v-if="!isEditing" class="text-content-primary font-mono text-sm">
-            {{ pymcTcpToken ? 'Configured' : 'Not set' }}
+            {{ pymcTcpTokenConfigured || pymcTcpToken ? 'Configured' : 'Not set' }}
           </div>
-          <input
-            v-else
-            v-model="pymcTcpToken"
-            type="text"
-            class="cfg-input w-full sm:w-72"
-            placeholder="Optional"
-          />
+          <div v-else class="w-full sm:w-96 space-y-2">
+            <input
+              v-model="pymcTcpToken"
+              type="password"
+              autocomplete="new-password"
+              :disabled="clearPymcTcpToken"
+              class="cfg-input w-full"
+              placeholder="Leave blank to preserve existing token"
+            />
+            <label
+              v-if="pymcTcpTokenConfigured"
+              class="flex items-center gap-2 text-xs text-content-secondary dark:text-content-muted"
+            >
+              <input v-model="clearPymcTcpToken" type="checkbox" />
+              Clear existing token
+            </label>
+          </div>
         </div>
       </template>
 

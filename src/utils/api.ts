@@ -1,5 +1,8 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { summarizeApiError } from './safeError';
+export { summarizeApiError };
+export type { SafeApiErrorSummary } from './safeError';
 import type {
   AuthMethodsResponse,
   OIDCExchangeResponse as GeneratedOIDCExchangeResponse,
@@ -172,6 +175,10 @@ export interface OidcExchangeResponse extends Partial<GeneratedOIDCExchangeRespo
 const API_BASE_URL = '/api';
 const API_SERVER_URL: string = '';
 
+function logApiError(context: string, error: unknown): void {
+  console.error(context, summarizeApiError(error));
+}
+
 export { API_BASE_URL, API_SERVER_URL };
 
 // Token refresh state
@@ -215,7 +222,7 @@ async function refreshToken(): Promise<string> {
         throw new Error('Token refresh failed');
       }
     } catch (error) {
-      console.error('Token refresh error:', error);
+      logApiError('Token refresh error:', error);
       const appRuntime = useAppRuntimeStore();
       await appRuntime.handleAuthFailure(
         isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
@@ -294,7 +301,7 @@ authClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('Auth API Request Error:', error);
+    logApiError('Auth API Request Error:', error);
     return Promise.reject(error);
   },
 );
@@ -318,7 +325,7 @@ authClient.interceptors.response.use(
       }
     }
 
-    console.error('Auth API Response Error:', error.response?.data || error.message);
+    logApiError('Auth API Response Error:', error);
     return Promise.reject(error);
   },
 );
@@ -361,7 +368,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('API Request Error:', error);
+    logApiError('API Request Error:', error);
     return Promise.reject(error);
   },
 );
@@ -385,7 +392,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    console.error('API Response Error:', error.response?.data || error.message);
+    logApiError('API Response Error:', error);
     return Promise.reject(error);
   },
 );
