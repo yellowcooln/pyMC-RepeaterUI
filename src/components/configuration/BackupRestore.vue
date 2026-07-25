@@ -465,6 +465,12 @@
         {{ identityError }}
       </p>
     </div>
+
+    <RestartModal
+      v-model="showRestartModal"
+      title="Configuration Imported"
+      message="Restart the service to activate the imported configuration."
+    />
   </div>
 </template>
 
@@ -472,6 +478,7 @@
 import { ref, computed } from 'vue';
 import ApiService from '@/utils/api';
 import Spinner from '@/components/ui/Spinner.vue';
+import RestartModal from '@/components/modals/RestartModal.vue';
 
 const isInsecure = computed(() => window.location.protocol === 'http:');
 
@@ -554,6 +561,7 @@ const importing = ref(false);
 const importSuccess = ref('');
 const importError = ref('');
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const showRestartModal = ref(false);
 
 const importPreviewSections = computed(() => {
   if (!importPreview.value?.config) return '';
@@ -610,14 +618,15 @@ async function importConfig() {
   try {
     const res = await ApiService.importConfig(importPreview.value.config);
     if (res.success) {
-      const data = res.data as {
+      const data = (res.data ?? res) as {
         sections_updated?: string[];
         restart_required?: boolean;
         message?: string;
       };
       let msg = res.message || data?.message || 'Configuration imported.';
       if (data?.restart_required) {
-        msg += ' A service restart is required for radio changes to take effect.';
+        msg += ' A service restart is required for the imported changes to take effect.';
+        showRestartModal.value = true;
       }
       importSuccess.value = msg;
       showImportConfirm.value = false;
