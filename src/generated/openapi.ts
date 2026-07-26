@@ -3602,7 +3602,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   roomPostMessage = {
     /**
-     * @description Add a new message to a room server. Message will be distributed to all synced clients. **Special author values:** - `"server"` or `"system"` - System message, goes to ALL clients (API only) - Any hex string - Normal message, NOT sent to that client **Security:** - Radio messages cannot use server key (blocked) - API messages can use server key (for announcements) **Rate Limits:** - 10 messages/minute per author_pubkey - 160 bytes max message length - Global 1.1s gap between transmissions
+     * @description Add a new message to a room server. Message will be distributed to all synced clients. **Special author values:** - `"server"` or `"system"` - System message, goes to ALL clients (API only) - Any hex string - Normal message, NOT sent to that client **Security:** - Radio messages cannot use server key (blocked) - `server`/`system` announcements require an administrator JWT session - API tokens may post only with an explicit client public key **Rate Limits:** - 10 messages/minute per author_pubkey - 160 bytes max message length - Global 1.1s gap between transmissions
      *
      * @tags Room Server
      * @name RoomPostMessageCreate
