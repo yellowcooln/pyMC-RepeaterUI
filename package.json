@@ -51,7 +51,7 @@
     "@vitest/eslint-plugin": "^1.6.14",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.7.0",
-    "@vue/test-utils": "^2.4.6",
+    "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.4.27",
     "eslint": "^10.2.0",
@@ -64,9 +64,12 @@
     "swagger-typescript-api": "^13.11.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~6.0.2",
-    "vite": "^8.0.5",
+    "vite": "^8.1.5",
     "vite-plugin-vue-devtools": "^8.1.1",
     "vitest": "^4.1.2",
     "vue-tsc": "^3.2.6"
+  },
+  "overrides": {
+    "js-beautify": "^2.0.3"
   }
 }
