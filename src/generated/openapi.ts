@@ -2789,8 +2789,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       query: {
         session_id: string;
         last_event_id?: number;
-        /** JWT token for EventSource clients that cannot send Authorization headers. */
-        token?: string;
+        /** Short-lived one-time stream ticket for EventSource clients. */
+        ticket?: string;
       },
       params: RequestParams = {},
     ) =>
