@@ -1437,6 +1437,23 @@ export class ApiService {
    * Handle API errors consistently
    */
   private static handleError(error: unknown): Error {
+    if (error && typeof error === 'object') {
+      const generatedError = error as { status?: unknown; error?: unknown };
+      const responseBody = generatedError.error;
+
+      if (responseBody && typeof responseBody === 'object') {
+        const body = responseBody as { error?: unknown; message?: unknown };
+        if (typeof body.error === 'string' && body.error) return new Error(body.error);
+        if (typeof body.message === 'string' && body.message) return new Error(body.message);
+      } else if (typeof responseBody === 'string' && responseBody) {
+        return new Error(responseBody);
+      }
+
+      if (typeof generatedError.status === 'number') {
+        return new Error(`HTTP ${generatedError.status}`);
+      }
+    }
+
     if (axios.isAxiosError(error)) {
       if (error.response) {
         // Server responded with error status

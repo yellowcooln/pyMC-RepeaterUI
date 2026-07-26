@@ -12,6 +12,7 @@ const generatedApiClientMock = {
   dbPurge: { dbPurgeCreate: vi.fn() },
   dbVacuum: { dbVacuumCreate: vi.fn() },
   configExport: { configExportList: vi.fn() },
+  configImport: { configImportCreate: vi.fn() },
   createIdentity: { createIdentityCreate: vi.fn() },
   neighborScopes: { neighborScopesList: vi.fn() },
   queryNeighborScopes: { queryNeighborScopesCreate: vi.fn() },
@@ -264,6 +265,22 @@ describe('ApiService contract regressions', () => {
     expect(generatedApiClientMock.configExport.configExportList).toHaveBeenCalledWith(
       { include_secrets: true },
       {},
+    );
+  });
+
+  it('importConfig preserves safe errors thrown by the generated fetch client', async () => {
+    generatedApiClientMock.configImport.configImportCreate.mockRejectedValue({
+      status: 403,
+      error: {
+        success: false,
+        error: 'Authenticate to import configuration.',
+      },
+    });
+
+    const { default: ApiService } = await import('@/utils/api');
+
+    await expect(ApiService.importConfig({ radio_type: 'pymc_usb' })).rejects.toThrow(
+      'Authenticate to import configuration.',
     );
   });
 });
