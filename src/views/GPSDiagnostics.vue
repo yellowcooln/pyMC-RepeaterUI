@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import ApiService, { API_SERVER_URL } from '@/utils/api';
+import ApiService from '@/utils/api';
 import { getToken, isTokenExpired } from '@/utils/auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import type { GPSDiagnostics, GPSSatellite } from '@/types/api';
@@ -67,6 +67,8 @@ const error = ref<string | null>(null);
 const lastLoaded = ref<Date | null>(null);
 const showRawSnapshot = ref(false);
 const eventSource = ref<EventSource | null>(null);
+let streamGeneration = 0;
+let streamReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const appRuntime = useAppRuntimeStore();
 const globeStage = ref<HTMLElement | null>(null);
 const globeCanvas = ref<HTMLCanvasElement | null>(null);
@@ -126,18 +128,30 @@ const fetchGps = async () => {
 };
 
 const closeEventSource = () => {
+  streamGeneration += 1;
+  if (streamReconnectTimer) {
+    clearTimeout(streamReconnectTimer);
+    streamReconnectTimer = null;
+  }
   if (eventSource.value) {
     eventSource.value.close();
     eventSource.value = null;
   }
 };
 
-const connectEventSource = () => {
+const connectEventSource = async () => {
   closeEventSource();
-
-  const token = getToken();
-  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-  eventSource.value = new EventSource(`${API_SERVER_URL}/api/gps-stream${tokenParam}`);
+  const generation = streamGeneration;
+  let url: string;
+  try {
+    url = await ApiService.createStreamUrl('/api/gps-stream');
+  } catch (ticketError) {
+    error.value = ticketError instanceof Error ? ticketError.message : 'Could not authorize GPS stream';
+    isLoading.value = false;
+    return;
+  }
+  if (generation !== streamGeneration) return;
+  eventSource.value = new EventSource(url);
 
   eventSource.value.onmessage = (event: MessageEvent<string>) => {
     try {
@@ -176,12 +190,17 @@ const connectEventSource = () => {
       error.value = 'GPS live stream disconnected. Reconnecting...';
       isLoading.value = false;
     }
+    closeEventSource();
+    streamReconnectTimer = setTimeout(() => {
+      streamReconnectTimer = null;
+      void connectEventSource();
+    }, 1000);
   };
 };
 
 onMounted(async () => {
   await fetchGps();
-  connectEventSource();
+  void connectEventSource();
 });
 
 onUnmounted(() => {

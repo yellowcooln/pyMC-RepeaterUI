@@ -885,6 +885,41 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       }),
 
     /**
+     * @description Returns a short-lived, single-use opaque ticket bound to one supported SSE or WebSocket path. Browser clients use the ticket in the stream URL because native EventSource and WebSocket constructors cannot set an Authorization header. API clients that can set headers should continue using BearerAuth or ApiKeyAuth directly on the stream request.
+     *
+     * @tags Authentication
+     * @name StreamTicketCreate
+     * @summary Issue a one-time browser stream ticket
+     * @request POST:/auth/stream_ticket
+     * @secure
+     */
+    streamTicketCreate: (
+      data: {
+        /** @example "/api/gps-stream" */
+        path: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        {
+          success: true;
+          ticket: string;
+          path: string;
+          /** @example 30 */
+          expires_in: number;
+        },
+        void
+      >({
+        path: `/auth/stream_ticket`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
      * @description Public OIDC protocol endpoint. It creates one-time state, nonce, and PKCE verifier state, then redirects to the configured provider. The callback URL is derived from configured external_url, not request headers.
      *
      * @tags Authentication

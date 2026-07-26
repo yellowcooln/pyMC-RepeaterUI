@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue';
 import ApiService from '@/utils/api';
-import { getToken } from '@/utils/auth';
 import Spinner from '@/components/ui/Spinner.vue';
 
 interface Props {
@@ -270,11 +269,15 @@ async function startInstall() {
 
   // 2. Open SSE progress stream
   stopEventSource();
-  // EventSource can't send headers – pass JWT as ?token= query param (supported by auth middleware)
-  const jwt = getToken();
-  const sseUrl = jwt
-    ? `/api/update/progress?token=${encodeURIComponent(jwt)}`
-    : '/api/update/progress';
+  let sseUrl: string;
+  try {
+    sseUrl = await ApiService.createStreamUrl('/api/update/progress');
+  } catch (ticketError) {
+    installState.value = 'error';
+    installError.value =
+      ticketError instanceof Error ? ticketError.message : 'Could not authorize update stream';
+    return;
+  }
   eventSource = new EventSource(sseUrl);
 
   eventSource.onmessage = (event) => {

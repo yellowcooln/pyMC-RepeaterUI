@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, onUnmounted, onMounted, computed } from 'vue';
-import { ApiService, API_SERVER_URL } from '@/utils/api';
+import { ApiService } from '@/utils/api';
 import { useSystemStore } from '@/stores/system';
-import { getToken } from '@/utils/auth';
 import RestartModal from '@/components/modals/RestartModal.vue';
 
 defineOptions({ name: 'CADCalibrationView' });
@@ -79,6 +78,7 @@ interface LogEvent {
 const isRunning = ref(false);
 const startTime = ref<number | null>(null);
 const eventSource = ref<EventSource | null>(null);
+let eventSourceReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const calibrationData = ref<Record<string, CalibrationResult>>({});
 const bestCalibrationResult = ref<CalibrationResult | null>(null);
 const backendRecommendedResult = ref<CalibrationResult | null>(null);
@@ -512,7 +512,7 @@ async function startCalibrationInternal(forceStart = false) {
         }
       }, 1000);
 
-      connectEventSource();
+      void connectEventSource();
     } else {
       throw new Error(result.error || 'Failed to start calibration');
     }
@@ -559,14 +559,23 @@ async function stopCalibration() {
   }
 }
 
-function connectEventSource() {
+async function connectEventSource() {
   if (eventSource.value) {
     eventSource.value.close();
   }
 
-  const token = getToken();
-  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-  eventSource.value = new EventSource(`${API_SERVER_URL}/api/cad-calibration-stream${tokenParam}`);
+  let url: string;
+  try {
+    url = await ApiService.createStreamUrl('/api/cad-calibration-stream');
+  } catch (ticketError) {
+    pushLog(
+      'error',
+      ticketError instanceof Error ? ticketError.message : 'Could not authorize calibration stream',
+    );
+    return;
+  }
+  if (!isRunning.value) return;
+  eventSource.value = new EventSource(url);
 
   eventSource.value.onmessage = function (event) {
     try {
@@ -579,11 +588,16 @@ function connectEventSource() {
 
   eventSource.value.onerror = function (event) {
     console.error('SSE connection error:', event);
-    if (!isRunning.value) {
-      if (eventSource.value) {
-        eventSource.value.close();
-        eventSource.value = null;
-      }
+    if (eventSource.value) {
+      eventSource.value.close();
+      eventSource.value = null;
+    }
+    if (isRunning.value) {
+      if (eventSourceReconnectTimer) clearTimeout(eventSourceReconnectTimer);
+      eventSourceReconnectTimer = setTimeout(() => {
+        eventSourceReconnectTimer = null;
+        void connectEventSource();
+      }, 1000);
     }
   };
 }
@@ -830,6 +844,7 @@ async function saveSettings() {
 }
 
 onUnmounted(() => {
+  if (eventSourceReconnectTimer) clearTimeout(eventSourceReconnectTimer);
   stopManualCadCheck();
   if (eventSource.value) {
     eventSource.value.close();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import ApiService, { API_SERVER_URL } from '@/utils/api';
+import ApiService from '@/utils/api';
 import { getToken, isTokenExpired } from '@/utils/auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import Spinner from '@/components/ui/Spinner.vue';
@@ -361,7 +361,7 @@ function scheduleReconnect() {
   }, STREAM_RETRY_MS);
 }
 
-function connectStream() {
+async function connectStream() {
   if (!liveStreamingEnabled.value) {
     streamState.value = 'paused';
     return;
@@ -369,13 +369,18 @@ function connectStream() {
 
   disconnectStream('connecting');
 
-  const token = getToken();
   const params = new URLSearchParams();
-  if (token) params.set('token', token);
   if (lastLogId.value > 0) params.set('since_id', String(lastLogId.value));
 
-  const query = params.toString();
-  const url = `${API_SERVER_URL}/api/logs_stream${query ? `?${query}` : ''}`;
+  let url: string;
+  try {
+    url = await ApiService.createStreamUrl('/api/logs_stream', params);
+  } catch (ticketError) {
+    error.value = ticketError instanceof Error ? ticketError.message : 'Could not authorize log stream';
+    scheduleReconnect();
+    return;
+  }
+  if (!liveStreamingEnabled.value) return;
   const source = new EventSource(url);
   eventSource.value = source;
 

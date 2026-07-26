@@ -313,9 +313,18 @@ const upsertDiscoveryResult = (result: DiscoveryResult) => {
   discoveryResults.value = [...discoveryResults.value, result];
 };
 
-const attachDiscoveryStream = (sessionId: string) => {
+const attachDiscoveryStream = async (sessionId: string) => {
   closeDiscoveryStream();
-  const source = new EventSource(ApiService.getNeighborDiscoveryStreamUrl(sessionId));
+  let url: string;
+  try {
+    url = await ApiService.getNeighborDiscoveryStreamUrl(sessionId);
+  } catch (ticketError) {
+    discoveryError.value =
+      ticketError instanceof Error ? ticketError.message : 'Could not authorize discovery stream';
+    discoveryLoading.value = false;
+    return;
+  }
+  const source = new EventSource(url);
   discoveryEventSource = source;
   let finalized = false;
 
@@ -397,7 +406,7 @@ const startDiscovery = async () => {
     }
 
     discoverySession.value = response.data;
-    attachDiscoveryStream(response.data.session_id);
+    await attachDiscoveryStream(response.data.session_id);
   } catch (error) {
     console.error('Error starting discovery:', error);
     discoveryError.value = error instanceof Error ? error.message : 'Failed to start discovery';

@@ -399,6 +399,24 @@ apiClient.interceptors.response.use(
 
 // Generic API utility class
 export class ApiService {
+  static async createStreamTicket(path: string): Promise<string> {
+    const response = await authClient.post('/auth/stream_ticket', { path });
+    const payload = response.data as { success?: boolean; ticket?: unknown };
+    if (payload.success !== true || typeof payload.ticket !== 'string' || !payload.ticket) {
+      throw new Error('Stream ticket response was invalid');
+    }
+    return payload.ticket;
+  }
+
+  static async createStreamUrl(
+    path: string,
+    params: URLSearchParams = new URLSearchParams(),
+  ): Promise<string> {
+    params.set('ticket', await this.createStreamTicket(path));
+    const query = params.toString();
+    return `${API_SERVER_URL}${path}${query ? `?${query}` : ''}`;
+  }
+
   private static async resolveRequestToken(): Promise<string | undefined> {
     const token = getToken();
 
@@ -977,16 +995,15 @@ export class ApiService {
     }
   }
 
-  static getNeighborDiscoveryStreamUrl(sessionId: string, lastEventId?: number): string {
+  static async getNeighborDiscoveryStreamUrl(
+    sessionId: string,
+    lastEventId?: number,
+  ): Promise<string> {
     const params = new URLSearchParams({ session_id: sessionId });
-    const token = getToken();
-    if (token) {
-      params.set('token', token);
-    }
     if (lastEventId !== undefined) {
       params.set('last_event_id', String(lastEventId));
     }
-    return `${API_BASE_URL}/discover_neighbors_stream?${params.toString()}`;
+    return this.createStreamUrl('/api/discover_neighbors_stream', params);
   }
 
   static async addDiscoveredNeighbor(payload: {

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { usePacketStore } from './packets';
 import { useSystemStore } from './system';
 import { useDataService } from './dataService';
-import { API_SERVER_URL } from '@/utils/api';
+import ApiService, { API_SERVER_URL } from '@/utils/api';
 import { getClientId, getToken, isTokenExpired } from '@/utils/auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 
@@ -33,6 +33,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     variant: 'info',
   });
   let snackbarTimer: number | null = null;
+  let connectSequence = 0;
 
   const packetStore = usePacketStore();
   const systemStore = useSystemStore();
@@ -98,13 +99,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
     );
   }
 
-  function buildUrl() {
+  function buildUrl(ticket: string) {
     let wsUrl: string;
 
-    const token = getToken();
     const clientId = getClientId();
     const query = new URLSearchParams();
-    if (token) query.set('token', token);
+    query.set('ticket', ticket);
     if (clientId) query.set('client_id', clientId);
 
     if (import.meta.env.DEV) {
@@ -168,7 +168,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }, delay);
   }
 
-  function connect(isReconnect = false) {
+  async function connect(isReconnect = false) {
     if (!canOpenConnection()) {
       return;
     }
@@ -189,7 +189,20 @@ export const useWebSocketStore = defineStore('websocket', () => {
       startReconnectSnackbar();
     }
 
-    const socket = new WebSocket(buildUrl());
+    const sequence = ++connectSequence;
+    let ticket: string;
+    try {
+      ticket = await ApiService.createStreamTicket('/ws/packets');
+    } catch (error) {
+      if (sequence === connectSequence && canOpenConnection()) {
+        console.error('[WebSocket] Could not obtain stream ticket:', error);
+        scheduleReconnect();
+      }
+      return;
+    }
+    if (sequence !== connectSequence || !canOpenConnection()) return;
+
+    const socket = new WebSocket(buildUrl(ticket));
     ws.value = socket;
 
     socket.onopen = () => {
@@ -281,6 +294,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   function pause(reason: PauseReason = 'lifecycle') {
+    connectSequence += 1;
     paused.value = true;
     clearReconnectTimer();
     connectionState.value = 'closed';
