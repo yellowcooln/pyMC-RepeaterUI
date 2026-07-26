@@ -56,10 +56,18 @@ const radioTypeOptions: RadioTypeOption[] = [
   },
 ];
 
-const config = computed<Record<string, any>>(() => {
-  const stats = systemStore.stats as Record<string, any> | null;
-  if (!stats) return {};
-  const nested = (stats.config as Record<string, any> | undefined) ?? {};
+type ConfigRecord = Record<string, unknown>;
+
+const config = computed<ConfigRecord>(() => {
+  const statsValue: unknown = systemStore.stats;
+  if (!statsValue || typeof statsValue !== 'object' || Array.isArray(statsValue)) return {};
+
+  const stats = statsValue as ConfigRecord;
+  const nestedValue = stats.config;
+  const nested =
+    nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue)
+      ? (nestedValue as ConfigRecord)
+      : {};
   // Some runtime builds expose config sections at top-level while others nest
   // under stats.config. Merge both so radio_type and section objects resolve.
   return { ...stats, ...nested };
