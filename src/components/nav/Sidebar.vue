@@ -6,10 +6,8 @@ import { useSystemStore } from '@/stores/system';
 import { usePacketStore } from '@/stores/packets';
 import { useDataService } from '@/stores/dataService';
 import { clearToken } from '@/utils/auth';
-import GitHubIcon from '../icons/github.vue';
-import DiscordIcon from '../icons/discord.vue';
-import CoffeeIcon from '../icons/coffee.vue';
 import AdvertModal from '../modals/AdvertModal.vue';
+import CommunityLinks from '../ui/CommunityLinks.vue';
 import NavItem from './NavItem.vue';
 import NoiseFloorSparkline from './NoiseFloorSparkline.vue';
 import { navigationItems, knownCapabilities } from '@/config/navigation';
@@ -483,22 +481,7 @@ const currentTime = computed(() => {
         </a>
       </div>
 
-      <div class="flex items-center justify-center gap-3">
-        <a href="https://discord.gg/6dYjGpPSK" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-indigo-50 dark:hover:bg-indigo-500/20 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="Discord">
-          <DiscordIcon class="w-5 h-5 text-white group-hover:text-indigo-500 transition-colors" />
-        </a>
-        <a href="https://openhop.dev" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="openHop Website">
-          <svg class="w-5 h-5 text-white group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 21a9.004 9.004 0 008.716-6M12 21a9.004 9.004 0 01-8.716-6M12 21c1.656 0 3-4.03 3-9s-1.344-9-3-9m0 18c-1.656 0-3-4.03-3-9s1.344-9 3-9m0 0a9.004 9.004 0 018.716 6M12 3a9.004 9.004 0 00-8.716 6M3.284 9h17.432M3.284 15h17.432" />
-          </svg>
-        </a>
-        <a href="https://github.com/openhop-dev/openhop_repeater" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="GitHub">
-          <GitHubIcon class="w-5 h-5 text-white group-hover:text-primary transition-colors" />
-        </a>
-        <a href="https://buymeacoffee.com/rightup" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-secondary/opacity-light hover:border-secondary/opacity-heavy dark:hover:border-secondary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="Buy Me a Coffee">
-          <CoffeeIcon class="w-5 h-5 text-white group-hover:text-secondary transition-colors" />
-        </a>
-      </div>
+      <CommunityLinks />
     </div>
   </aside>
 

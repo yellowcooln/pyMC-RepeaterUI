@@ -224,28 +224,7 @@
               class="h-4 sm:h-5 opacity-50 brightness-0 dark:brightness-100"
             />
           </div>
-          <div class="flex items-center justify-center gap-3">
-            <a
-              href="https://github.com/openhop-dev/openhop_repeater"
-              target="_blank"
-              class="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm"
-              title="GitHub"
-            >
-              <GitHubIcon
-                class="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover:text-primary transition-colors"
-              />
-            </a>
-            <a
-              href="https://buymeacoffee.com/rightup"
-              target="_blank"
-              class="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-secondary/opacity-light hover:border-secondary/opacity-heavy dark:hover:border-secondary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm"
-              title="Buy Me a Coffee"
-            >
-              <CoffeeIcon
-                class="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover:text-secondary transition-colors"
-              />
-            </a>
-          </div>
+          <CommunityLinks size="md" />
         </div>
       </div>
     </div>
@@ -280,9 +259,8 @@ import {
 } from '@/utils/api';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue';
+import CommunityLinks from '@/components/ui/CommunityLinks.vue';
 import Spinner from '@/components/ui/Spinner.vue';
-import GitHubIcon from '@/components/icons/github.vue';
-import CoffeeIcon from '@/components/icons/coffee.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { useTheme } from '@/composables/useTheme';
 import openHopLogo from '@/assets/logo/openhop_transparent_trim.png';

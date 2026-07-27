@@ -127,4 +127,46 @@ describe('Login form — iOS autofill contract', () => {
       'https://github.com/openhop-dev/openhop_repeater',
     )
   })
+
+  it('shows the same four community links as the authenticated sidebar', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/login', component: defineComponent({ template: '<div/>' }) }],
+    })
+    router.push('/login')
+    await router.isReady()
+
+    const { default: Login } = await import('@/views/Login.vue')
+    const wrapper = mount(Login, {
+      global: {
+        plugins: [router],
+        stubs: {
+          ChangePasswordModal: true,
+          ThemeToggle: true,
+          GitHubIcon: true,
+          CoffeeIcon: true,
+          Spinner: true,
+        },
+      },
+    })
+    await flushPromises()
+
+    const expectedLinks = [
+      ['Discord', 'https://discord.gg/6dYjGpPSK'],
+      ['openHop Website', 'https://openhop.dev'],
+      ['GitHub', 'https://github.com/openhop-dev/openhop_repeater'],
+      ['Buy Me a Coffee', 'https://buymeacoffee.com/rightup'],
+    ]
+
+    expect(wrapper.findAll('[data-testid="community-links"] a')).toHaveLength(4)
+    expect(
+      wrapper.find('a[title="openHop Website"] [data-testid="openhop-website-icon"]').exists(),
+    ).toBe(true)
+    for (const [title, href] of expectedLinks) {
+      const link = wrapper.get(`a[title="${title}"]`)
+      expect(link.attributes('href')).toBe(href)
+      expect(link.attributes('target')).toBe('_blank')
+      expect(link.attributes('rel')).toBe('noopener noreferrer')
+    }
+  })
 })
