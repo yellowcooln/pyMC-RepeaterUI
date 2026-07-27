@@ -38,8 +38,14 @@ const mocks = vi.hoisted(() => ({
           ok: true,
           timestamp: '2026-07-27T16:00:00Z',
           data: {
-            cpu: { usage_percent: 42.5 },
-            memory: { usage_percent: 61 },
+            cpu: {
+              usage_percent: 42.5,
+              count: 2,
+              frequency: 2500.006,
+              load_avg: { '1min': 6.785 },
+            },
+            memory: { total: 1073741824, available: 929612800, usage_percent: 61 },
+            network: { bytes_sent: 87747529, packets_sent: 232108 },
           },
         },
       ],
@@ -84,7 +90,7 @@ describe('Sensors dashboard', () => {
     const wrapper = mountView();
     const metrics = wrapper.findAll('[data-testid="sensor-metric"]');
 
-    expect(metrics).toHaveLength(7);
+    expect(metrics.length).toBeGreaterThan(7);
     expect(wrapper.text()).toContain('Battery voltage');
     expect(wrapper.text()).toContain('4.112 V');
     expect(wrapper.text()).toContain('Battery');
@@ -97,6 +103,23 @@ describe('Sensors dashboard', () => {
     expect(wrapper.text()).toContain('CPU · Usage');
     expect(wrapper.text()).toContain('42.5%');
     expect(wrapper.text()).toContain('Memory · Usage');
+  });
+
+  it('uses compact human-readable formatting instead of raw machine numbers', () => {
+    const text = mountView().text();
+
+    expect(text).toContain('CPU · Frequency');
+    expect(text).toContain('2.5 GHz');
+    expect(text).toContain('CPU · Load Avg · 1min');
+    expect(text).toContain('6.79');
+    expect(text).toContain('Memory · Total');
+    expect(text).toContain('1 GiB');
+    expect(text).toContain('Network · Bytes Sent');
+    expect(text).toContain('83.7 MiB');
+    expect(text).toContain('Network · Packets Sent');
+    expect(text).toContain('232.1K');
+    expect(text).not.toContain('2,500.006');
+    expect(text).not.toContain('1,073,741,824');
   });
 
   it('offers a labelled manual refresh action', async () => {

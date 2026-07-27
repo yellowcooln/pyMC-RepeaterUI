@@ -161,12 +161,64 @@ const fieldMeta = (key: string): { label: string; unit: string } => {
   return { label, unit: matched?.[1] ?? '' };
 };
 
-const formatMetricValue = (key: string, value: unknown): string => {
+const formatDecimal = (value: number, maximumFractionDigits = 3): string =>
+  value.toLocaleString(undefined, {
+    useGrouping: false,
+    maximumFractionDigits,
+  });
+
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  const unitIndex = Math.min(
+    Math.floor(Math.log(Math.abs(bytes)) / Math.log(1024)),
+    units.length - 1,
+  );
+  const scaled = bytes / 1024 ** unitIndex;
+  return `${formatDecimal(scaled, 1)} ${units[unitIndex]}`;
+};
+
+const formatCompactCount = (value: number): string => {
+  const units = [
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+    { threshold: 1_000, suffix: 'K' },
+  ];
+  const unit = units.find(({ threshold }) => Math.abs(value) >= threshold);
+  return unit
+    ? `${formatDecimal(value / unit.threshold, 1)}${unit.suffix}`
+    : formatDecimal(value, 0);
+};
+
+const formatDuration = (seconds: number): string => {
+  const wholeSeconds = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(wholeSeconds / 86400);
+  const hours = Math.floor((wholeSeconds % 86400) / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m`;
+  return `${wholeSeconds}s`;
+};
+
+const formatMetricValue = (path: string[], value: unknown): string => {
+  const key = path[path.length - 1] ?? '';
+  const fullPath = path.join('.').toLowerCase();
   if (value === null || value === undefined) return 'Not available';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return 'Not available';
-    const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+
+    if (fullPath === 'cpu.frequency') return `${formatDecimal(value / 1000, 2)} GHz`;
+    if (/^(memory|disk)\.(total|available|used|free)$/.test(fullPath)) return formatBytes(value);
+    if (/^network\.bytes_(sent|recv)$/.test(fullPath)) return formatBytes(value);
+    if (/^network\.packets_(sent|recv)$/.test(fullPath)) return formatCompactCount(value);
+    if (fullPath.startsWith('cpu.load_avg.')) return formatDecimal(value, 2);
+    if (fullPath === 'system.uptime') return formatDuration(value);
+    if (fullPath === 'system.boot_time') return new Date(value * 1000).toLocaleString();
+    if (path[0]?.toLowerCase() === 'temperatures') return `${formatDecimal(value, 1)}°C`;
+
+    const formatted = formatDecimal(value);
     const unit = fieldMeta(key).unit;
     const separator = unit === '%' || unit.startsWith('°') ? '' : ' ';
     return `${formatted}${unit ? `${separator}${unit}` : ''}`;
@@ -211,7 +263,7 @@ const metricRows = (reading: SensorReading) =>
     return {
       key: path.join('.'),
       label: group ? `${group} · ${label}` : label,
-      value: formatMetricValue(key, value),
+      value: formatMetricValue(path, value),
       prominent: typeof value === 'number' || typeof value === 'boolean',
     };
   });
