@@ -17,6 +17,9 @@ const buttonSizeClass = computed(() =>
   props.size === 'md' ? 'w-9 h-9 sm:w-10 sm:h-10' : 'w-9 h-9',
 );
 const iconSizeClass = computed(() => (props.size === 'md' ? 'w-5 h-5 sm:w-6 sm:h-6' : 'w-5 h-5'));
+const brandIconSizeClass = computed(() =>
+  props.size === 'md' ? 'w-6 h-6 sm:w-7 sm:h-7' : 'w-5 h-5',
+);
 const buttonClass =
   'inline-flex items-center justify-center rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium transition-all duration-300 hover:scale-110 group backdrop-blur-sm';
 </script>
@@ -49,9 +52,7 @@ const buttonClass =
       ]"
       title="openHop Website"
     >
-      <OpenHopIcon
-        :class="[iconSizeClass, 'text-white group-hover:text-primary transition-colors']"
-      />
+      <OpenHopIcon :class="[brandIconSizeClass, 'text-white transition-colors']" />
     </a>
     <a
       href="https://github.com/openhop-dev/openhop_repeater"

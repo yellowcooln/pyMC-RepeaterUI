@@ -167,6 +167,12 @@ describe('Login form — iOS autofill contract', () => {
         .get('a[title="openHop Website"] [data-testid="openhop-website-icon"]')
         .attributes('data-logo-source'),
     ).toBe('official-openhop-mark')
+    const websiteIcon = wrapper.get(
+      'a[title="openHop Website"] [data-testid="openhop-website-icon"]',
+    )
+    expect(websiteIcon.attributes('data-icon-treatment')).toBe('bold-official-mark')
+    expect(websiteIcon.classes()).toContain('sm:w-7')
+    expect(websiteIcon.classes()).not.toContain('group-hover:text-primary-300')
     for (const [title, href] of expectedLinks) {
       const link = wrapper.get(`a[title="${title}"]`)
       expect(link.attributes('href')).toBe(href)
