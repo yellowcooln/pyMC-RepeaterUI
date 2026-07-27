@@ -139,7 +139,7 @@ const progressPercentage = computed(() => {
 
 const canProceed = computed(() => {
   if (setupStore.currentStep === 1) {
-    return setupMode.value === 'new';
+    return setupMode.value === 'new' && setupStore.bootstrapToken.trim().length > 0;
   }
   return setupStore.canGoNext;
 });
@@ -304,15 +304,19 @@ async function restoreBackup() {
       throw new Error('Backup file does not contain a valid config payload.');
     }
 
-    const result = await ApiService.importConfig(config);
+    const result = await ApiService.importBootstrapConfig(config, setupStore.bootstrapToken);
     if (!result.success) {
       throw new Error(result.error || 'Restore failed.');
     }
 
-    restartModalTitle.value = 'Restore Applied';
-    restartModalMessage.value = 'Backup restored successfully. Restart the service to apply all settings.';
-    restartModalStartImmediately.value = false;
-    showRestartModal.value = true;
+    const repeater = config.repeater;
+    if (repeater && typeof repeater === 'object') {
+      const restoredName = (repeater as Record<string, unknown>).node_name;
+      if (typeof restoredName === 'string') setupStore.nodeName = restoredName;
+    }
+    setupMode.value = 'new';
+    setupStore.goToStep(2);
+    backupFile.value = null;
   } catch (error: unknown) {
     const e = error as { message?: string };
     setupStore.error = e.message || 'Failed to restore backup';
@@ -445,7 +449,7 @@ const stepTitles = [
                   </div>
                   <h3 class="text-xl font-semibold text-content-primary mb-2">Restore Backup</h3>
                   <p class="text-sm text-content-secondary dark:text-content-muted">
-                    Import a previously exported config and apply it to this repeater.
+                    Restore safe node details, then continue the secure setup wizard.
                   </p>
                 </div>
               </button>
@@ -472,6 +476,27 @@ const stepTitles = [
                   </p>
                 </div>
               </button>
+            </div>
+
+            <div class="max-w-3xl mx-auto rounded-[16px] border border-stroke-subtle dark:border-stroke/opacity-light bg-background-mute dark:bg-white/opacity-subtle p-5">
+              <label for="bootstrap-token" class="block text-sm font-semibold text-content-primary mb-2">
+                Local bootstrap token
+              </label>
+              <input
+                id="bootstrap-token"
+                v-model="setupStore.bootstrapToken"
+                type="password"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                class="w-full rounded-[12px] border border-stroke-subtle dark:border-stroke/opacity-light bg-background dark:bg-surface-elevated px-4 py-3 text-content-primary"
+                placeholder="Paste the token from the repeater host"
+              />
+              <p class="mt-2 text-xs text-content-secondary dark:text-content-muted">
+                Read it locally with
+                <code>sudo cat /var/lib/openhop_repeater/bootstrap-token</code>.
+                It remains only in memory during first-run setup and is removed from the host after setup completes.
+              </p>
             </div>
 
             <div
@@ -503,10 +528,10 @@ const stepTitles = [
                 <button
                   type="button"
                   @click="restoreBackup"
-                  :disabled="!backupFile || isRestoringBackup"
+                  :disabled="!backupFile || !setupStore.bootstrapToken.trim() || isRestoringBackup"
                   class="px-6 py-3 rounded-[12px] font-semibold transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   :class="
-                    backupFile && !isRestoringBackup
+                    backupFile && setupStore.bootstrapToken.trim() && !isRestoringBackup
                       ? 'bg-primary/opacity-medium hover:bg-primary/opacity-heavy text-primary border border-primary/opacity-heavy'
                       : 'bg-background-mute dark:bg-stroke/opacity-subtle text-content-muted border border-stroke-subtle dark:border-stroke/opacity-light'
                   "

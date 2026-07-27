@@ -15,7 +15,7 @@ interface HardwareOption {
   key: string;
   name: string;
   description: string;
-  config: any;
+  config: Record<string, unknown>;
 }
 
 type HardwareConnectionType = 'gpio' | 'usb' | 'network';
@@ -36,6 +36,7 @@ export const useSetupStore = defineStore('setup', () => {
   const selectedRadioPreset = ref<RadioPreset | null>(null);
   const adminPassword = ref('');
   const confirmPassword = ref('');
+  const bootstrapToken = ref('');
 
   // USB / TCP modem extra config
   const usbPort = ref('/dev/ttyACM0');
@@ -202,6 +203,7 @@ export const useSetupStore = defineStore('setup', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Bootstrap-Token': bootstrapToken.value.trim(),
         },
         body: JSON.stringify({
           node_name: nodeName.value.trim(),
@@ -286,6 +288,7 @@ export const useSetupStore = defineStore('setup', () => {
     };
     adminPassword.value = '';
     confirmPassword.value = '';
+    bootstrapToken.value = '';
     usbPort.value = '/dev/ttyACM0';
     tcpHost.value = '';
     tcpPort.value = 5055;
@@ -309,6 +312,7 @@ export const useSetupStore = defineStore('setup', () => {
     customRadio,
     adminPassword,
     confirmPassword,
+    bootstrapToken,
     hardwareOptions,
     radioPresets,
     isLoading,

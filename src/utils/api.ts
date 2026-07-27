@@ -1365,6 +1365,22 @@ export class ApiService {
     }
   }
 
+  static async importBootstrapConfig(
+    config: Record<string, unknown>,
+    bootstrapToken: string,
+  ): Promise<ImportConfigResponse> {
+    try {
+      const response = await authClient.post(
+        '/config_import',
+        { config },
+        { headers: { 'X-Bootstrap-Token': bootstrapToken.trim() } },
+      );
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleError(error);
+    }
+  }
+
   static async exportIdentityKey(): Promise<
     ApiResponse<{
       identity_key_hex: string;
