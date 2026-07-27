@@ -9,7 +9,7 @@ import { useAppRuntimeStore } from '@/stores/appRuntime';
 
 type ConnectionState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 type SnackbarVariant = 'info' | 'success' | 'error';
-type PauseReason = 'lifecycle' | 'logout' | 'hidden' | 'offline';
+type PauseReason = 'lifecycle' | 'logout' | 'offline';
 
 interface DisconnectOptions {
   preventReconnect?: boolean;
@@ -302,9 +302,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
     if (reason === 'offline') {
       resumeAnnouncementPending.value = true;
       showSnackbar('Connection lost', 'error', 4000);
-    } else if (reason === 'hidden') {
-      resumeAnnouncementPending.value = true;
-      hideSnackbar();
     } else if (reason === 'logout') {
       resumeAnnouncementPending.value = false;
       hideSnackbar();

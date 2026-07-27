@@ -100,9 +100,14 @@ export function shouldRefreshToken(): boolean {
   const payload = parseJWT(token);
   if (!payload || !payload.exp) return false;
 
-  // Refresh if less than 5 minutes remaining (300 seconds)
+  // Refresh in the final 20% of the token lifetime, capped at five minutes.
+  // A fixed five-minute window makes short-lived tokens refresh on every API
+  // request because a newly issued token is already inside that window.
   const timeUntilExpiry = payload.exp * 1000 - Date.now();
-  return timeUntilExpiry > 0 && timeUntilExpiry < 300000;
+  const issuedAt = Number(payload.iat) * 1000;
+  const tokenLifetime = Number.isFinite(issuedAt) ? payload.exp * 1000 - issuedAt : 300000;
+  const refreshWindow = Math.min(300000, Math.max(30000, tokenLifetime * 0.2));
+  return timeUntilExpiry > 0 && timeUntilExpiry < refreshWindow;
 }
 
 export function isOidcAuthenticated(token = getToken()): boolean {

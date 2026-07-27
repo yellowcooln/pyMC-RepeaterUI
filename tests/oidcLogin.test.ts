@@ -299,6 +299,7 @@ describe('OIDC session metadata behavior', () => {
       client_id: 'browser-client-1',
       auth_source: 'oidc',
       session_exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000) - 780,
       exp: Math.floor(Date.now() / 1000) + 120,
     });
     const refreshedOidcToken = makeJWT({
@@ -306,6 +307,7 @@ describe('OIDC session metadata behavior', () => {
       client_id: 'browser-client-1',
       auth_source: 'oidc',
       session_exp: Math.floor(Date.now() / 1000) + 3600,
+      iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 900,
     });
     localStorage.setItem(TOKEN_KEY, nearExpiryOidcToken);

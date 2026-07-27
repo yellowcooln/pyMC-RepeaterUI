@@ -9,8 +9,7 @@ export function useConnectionLifecycle() {
   const dataService = useDataService();
 
   const handleVisibilityChange = () => {
-    const isVisible = document.visibilityState === 'visible';
-    appRuntime.setDocumentVisible(isVisible);
+    appRuntime.setDocumentVisible(document.visibilityState === 'visible');
   };
 
   const handleOnline = () => {
@@ -42,8 +41,6 @@ export function useConnectionLifecycle() {
         websocketStore.connect();
       } else if (!appRuntime.isOnline) {
         websocketStore.pause('offline');
-      } else if (!appRuntime.isDocumentVisible) {
-        websocketStore.pause('hidden');
       } else {
         websocketStore.pause('lifecycle');
       }

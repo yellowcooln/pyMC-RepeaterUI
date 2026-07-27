@@ -20,8 +20,7 @@ export const useAppRuntimeStore = defineStore('appRuntime', () => {
   const logoutInProgress = ref(false);
 
   const canMaintainConnections = computed(
-    () =>
-      isOnline.value && isDocumentVisible.value && isAuthenticated.value && !logoutInProgress.value,
+    () => isOnline.value && isAuthenticated.value && !logoutInProgress.value,
   );
 
   function syncAuthState() {

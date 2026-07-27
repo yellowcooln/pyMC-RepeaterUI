@@ -109,7 +109,8 @@ describe('Scenario 1 — bootstrap modal must not appear in unconfigured state',
     store.syncAuthState();
     expect(store.isAuthenticated).toBe(true);
     const onSetupPage: string = '/setup';
-    const showLayout = store.isAuthenticated && onSetupPage !== '/login' && onSetupPage !== '/setup';
+    const showLayout =
+      store.isAuthenticated && onSetupPage !== '/login' && onSetupPage !== '/setup';
     expect(showLayout).toBe(false);
   });
 });
@@ -234,11 +235,14 @@ describe('Scenario 3 — setup check is always the first gate in the router guar
     setActivePinia(createPinia());
     localStorage.clear();
     vi.stubGlobal('fetch', vi.fn());
-    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
-      matches: false,
-      addListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: false,
+        addListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
   });
 
   afterEach(() => {
@@ -318,11 +322,14 @@ describe('Scenario 4 — DataService re-bootstraps after logout', () => {
     setActivePinia(createPinia());
     localStorage.clear();
     vi.useFakeTimers();
-    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
-      matches: false,
-      addListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: false,
+        addListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
   });
 
   afterEach(() => {
@@ -338,12 +345,14 @@ describe('Scenario 4 — DataService re-bootstraps after logout', () => {
     const { usePacketStore } = await import('@/stores/packets');
     const { useNeighborStore } = await import('@/stores/neighbors');
 
-    const fetchStatsSpy = vi.spyOn(useSystemStore(), 'fetchStats').mockResolvedValue(undefined as any);
-    vi.spyOn(usePacketStore(), 'fetchPacketStats').mockResolvedValue(undefined as any);
-    vi.spyOn(usePacketStore(), 'fetchNoiseFloorHistory').mockResolvedValue(undefined as any);
-    vi.spyOn(usePacketStore(), 'fetchRecentPackets').mockResolvedValue(undefined as any);
-    vi.spyOn(usePacketStore(), 'initializeSparklineHistory').mockResolvedValue(undefined as any);
-    vi.spyOn(useNeighborStore(), 'fetchAll').mockResolvedValue(undefined as any);
+    const fetchStatsSpy = vi
+      .spyOn(useSystemStore(), 'fetchStats')
+      .mockResolvedValue(undefined as never);
+    vi.spyOn(usePacketStore(), 'fetchPacketStats').mockResolvedValue(undefined as never);
+    vi.spyOn(usePacketStore(), 'fetchNoiseFloorHistory').mockResolvedValue(undefined as never);
+    vi.spyOn(usePacketStore(), 'fetchRecentPackets').mockResolvedValue(undefined as never);
+    vi.spyOn(usePacketStore(), 'initializeSparklineHistory').mockResolvedValue(undefined as never);
+    vi.spyOn(useNeighborStore(), 'fetchAll').mockResolvedValue(undefined as never);
     vi.spyOn(useNeighborStore(), 'isStale').mockReturnValue(true);
 
     return { fetchStatsSpy };
@@ -395,5 +404,87 @@ describe('Scenario 4 — DataService re-bootstraps after logout', () => {
     await appRuntime.stopSession('logout');
 
     expect(resetSpy).toHaveBeenCalled();
+  });
+});
+
+describe('Scenario 5 — short sessions do not refresh on every request', () => {
+  const now = new Date('2026-07-27T18:00:00Z');
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  it('does not refresh a five-minute token while four minutes remain', async () => {
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    storeToken(
+      makeJWT({
+        sub: 'testuser',
+        iat: nowSeconds - 60,
+        exp: nowSeconds + 240,
+        client_id: 'test-client',
+      }),
+    );
+
+    const { shouldRefreshToken } = await import('@/utils/auth');
+    expect(shouldRefreshToken()).toBe(false);
+  });
+
+  it('refreshes a five-minute token in its final minute', async () => {
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    storeToken(
+      makeJWT({
+        sub: 'testuser',
+        iat: nowSeconds - 250,
+        exp: nowSeconds + 50,
+        client_id: 'test-client',
+      }),
+    );
+
+    const { shouldRefreshToken } = await import('@/utils/auth');
+    expect(shouldRefreshToken()).toBe(true);
+  });
+
+  it('keeps the five-minute cap for long-lived tokens', async () => {
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    storeToken(
+      makeJWT({
+        sub: 'testuser',
+        iat: nowSeconds - 3360,
+        exp: nowSeconds + 240,
+        client_id: 'test-client',
+      }),
+    );
+
+    const { shouldRefreshToken } = await import('@/utils/auth');
+    expect(shouldRefreshToken()).toBe(true);
+  });
+});
+
+describe('Scenario 6 — background tabs retain realtime connectivity', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('can maintain connections while authenticated, online, and hidden', async () => {
+    const { useAppRuntimeStore } = await import('@/stores/appRuntime');
+    const appRuntime = useAppRuntimeStore();
+
+    appRuntime.markAuthenticated();
+    appRuntime.setOnline(true);
+    appRuntime.setDocumentVisible(false);
+
+    expect(appRuntime.canMaintainConnections).toBe(true);
   });
 });
