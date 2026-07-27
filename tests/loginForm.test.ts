@@ -162,6 +162,11 @@ describe('Login form — iOS autofill contract', () => {
     expect(
       wrapper.find('a[title="openHop Website"] [data-testid="openhop-website-icon"]').exists(),
     ).toBe(true)
+    expect(
+      wrapper
+        .get('a[title="openHop Website"] [data-testid="openhop-website-icon"]')
+        .attributes('data-logo-source'),
+    ).toBe('official-openhop-mark')
     for (const [title, href] of expectedLinks) {
       const link = wrapper.get(`a[title="${title}"]`)
       expect(link.attributes('href')).toBe(href)
