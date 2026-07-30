@@ -152,7 +152,7 @@ describe('Login form — iOS autofill contract', () => {
     await flushPromises()
 
     const expectedLinks = [
-      ['Discord', 'https://discord.gg/6dYjGpPSK'],
+      ['Discord', 'https://discord.gg/3s8MMaSTzq'],
       ['openHop Website', 'https://openhop.dev'],
       ['GitHub', 'https://github.com/openhop-dev/openhop_repeater'],
       ['Buy Me a Coffee', 'https://buymeacoffee.com/rightup'],

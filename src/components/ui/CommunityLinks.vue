@@ -27,7 +27,7 @@ const buttonClass =
 <template>
   <div data-testid="community-links" class="flex items-center justify-center gap-3">
     <a
-      href="https://discord.gg/6dYjGpPSK"
+      href="https://discord.gg/3s8MMaSTzq"
       target="_blank"
       rel="noopener noreferrer"
       :class="[
