@@ -32,6 +32,7 @@ function nextTempId() { return _nextTempId--; }
 const unscopedFloodPolicy = ref<'allow' | 'deny'>('deny');
 let snapshotUnscopedPolicy: 'allow' | 'deny' = 'deny';
 const defaultRegion = ref<string | null>(null);
+const defaultRegionDisplay = computed(() => defaultRegion.value || '<null>');
 const defaultRegionInput = ref('');
 let snapshotDefaultRegion: string | null = null;
 
@@ -498,7 +499,7 @@ defineExpose({ requestLeave, isEditing });
             Default Region Scope
           </h4>
           <p class="text-content-secondary dark:text-content-muted text-[10px] sm:text-xs">
-            Used for locally-originated flood adverts. Current: {{ defaultRegion || '<null>' }}
+            Used for locally-originated flood adverts. Current: {{ defaultRegionDisplay }}
           </p>
         </div>
         <div class="w-full sm:w-auto sm:min-w-[320px] flex items-center gap-2">
