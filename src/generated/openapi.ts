@@ -30,7 +30,7 @@ export interface NeighborScopeRecord {
   /** Epoch seconds of the answer `scopes` came from */
   responded_at?: number | null;
   /** Outcome of the most recent query */
-  status: "responded" | "timeout" | "send_failed";
+  status: 'responded' | 'timeout' | 'send_failed';
   /** Epoch seconds of the most recent query */
   queried_at: number;
 }
@@ -3858,7 +3858,15 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @request GET:/needs_setup
      */
     needsSetupList: (params: RequestParams = {}) =>
-      this.request<object, any>({
+      this.request<
+        {
+          needs_setup: boolean;
+          reasons: object;
+          /** True when first-run mutations require a locally delivered bootstrap token */
+          bootstrap_required: boolean;
+        },
+        any
+      >({
         path: `/needs_setup`,
         method: 'GET',
         format: 'json',
@@ -3935,18 +3943,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   setupWizard = {
     /**
-     * No description
+     * @description Requires the one-time token from the local bootstrap-token file.
      *
      * @tags System
      * @name SetupWizardCreate
      * @summary Submit setup wizard payload
      * @request POST:/setup_wizard
+     * @secure
      */
     setupWizardCreate: (data: object, params: RequestParams = {}) =>
-      this.request<object, any>({
+      this.request<object, void>({
         path: `/setup_wizard`,
         method: 'POST',
         body: data,
+        secure: true,
         type: ContentType.Json,
         format: 'json',
         ...params,
@@ -4016,9 +4026,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     publishNeighborsCreate: (params: RequestParams = {}) =>
       this.request<SuccessResponse, void>({
         path: `/publish_neighbors`,
-        method: "POST",
+        method: 'POST',
         secure: true,
-        format: "json",
+        format: 'json',
         ...params,
       }),
   };
@@ -4047,9 +4057,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         any
       >({
         path: `/neighbor_scopes`,
-        method: "GET",
+        method: 'GET',
         secure: true,
-        format: "json",
+        format: 'json',
         ...params,
       }),
   };
@@ -4076,7 +4086,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
           error?: string;
           data?: {
             pubkey: string;
-            status: "responded" | "timeout" | "send_failed";
+            status: 'responded' | 'timeout' | 'send_failed';
             /** Comma-separated scope names; empty when unscoped */
             scopes: string;
             /** Whether the request actually reached the air */
@@ -4088,11 +4098,11 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         void
       >({
         path: `/query_neighbor_scopes`,
-        method: "POST",
+        method: 'POST',
         body: data,
         secure: true,
         type: ContentType.Json,
-        format: "json",
+        format: 'json',
         ...params,
       }),
   };
@@ -4418,18 +4428,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   configImport = {
     /**
-     * No description
+     * @description Authenticated administrators may import the full supported schema. During first run, a local bootstrap token allows only repeater node_name, latitude, and longitude.
      *
      * @tags System
      * @name ConfigImportCreate
      * @summary Import configuration
      * @request POST:/config_import
+     * @secure
      */
     configImportCreate: (data: object, params: RequestParams = {}) =>
-      this.request<object, any>({
+      this.request<object, void>({
         path: `/config_import`,
         method: 'POST',
         body: data,
+        secure: true,
         type: ContentType.Json,
         format: 'json',
         ...params,
