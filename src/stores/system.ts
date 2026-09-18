@@ -348,6 +348,88 @@ export const useSystemStore = defineStore('system', () => {
     };
   }
 
+  // --- Sensor config state ---
+  const sensorsConfig = ref<null | {
+    enabled: boolean;
+    poll_interval_seconds: number;
+    auto_install_packages: boolean;
+    definitions: Array<{
+      type: string;
+      name: string;
+      enabled: boolean;
+      auto_install_packages?: boolean;
+      settings?: Record<string, unknown>;
+    }>;
+  }>(null);
+  const isSavingSensors = ref(false);
+  const isRestarting = ref(false);
+
+  async function fetchSensorsConfig(): Promise<void> {
+    try {
+      const response = await ApiService.get('/sensors_config');
+      if (response.success && response.data) {
+        const d = response.data as {
+          enabled: boolean;
+          poll_interval_seconds: number;
+          auto_install_packages: boolean;
+          definitions: Array<Record<string, unknown>>;
+        };
+        sensorsConfig.value = {
+          enabled: d.enabled,
+          poll_interval_seconds: d.poll_interval_seconds,
+          auto_install_packages: d.auto_install_packages,
+          definitions: (d.definitions || []).map((def: Record<string, unknown>) => ({
+            type: String(def.type || ''),
+            name: String(def.name || ''),
+            enabled: def.enabled !== false,
+            auto_install_packages: def.auto_install_packages as boolean | undefined,
+            settings: (def.settings as Record<string, unknown> | undefined) || {},
+          })),
+        };
+      }
+    } catch (err) {
+      console.error('Error fetching sensors config:', err);
+    }
+  }
+
+  async function saveSensorsConfig(): Promise<boolean> {
+    if (!sensorsConfig.value) return false;
+    isSavingSensors.value = true;
+    try {
+      const payload = {
+        enabled: sensorsConfig.value.enabled,
+        poll_interval_seconds: sensorsConfig.value.poll_interval_seconds,
+        auto_install_packages: sensorsConfig.value.auto_install_packages,
+        definitions: sensorsConfig.value.definitions,
+      };
+      const response = await ApiService.post('/sensors/config', payload);
+      if (response.success) {
+        await fetchStats();
+        await fetchSensorsConfig();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error saving sensors config:', err);
+      return false;
+    } finally {
+      isSavingSensors.value = false;
+    }
+  }
+
+  async function restartService(): Promise<boolean> {
+    isRestarting.value = true;
+    try {
+      const response = await ApiService.post('/sensors/restart');
+      return response.success ?? false;
+    } catch (err) {
+      console.error('Error restarting service:', err);
+      return false;
+    } finally {
+      isRestarting.value = false;
+    }
+  }
+
   // Reset store state
   function reset() {
     stats.value = null;
@@ -359,6 +441,9 @@ export const useSystemStore = defineStore('system', () => {
     dutyCycleUtilization.value = 0;
     dutyCycleMax.value = 10;
     clearConfigCache();
+    sensorsConfig.value = null;
+    isSavingSensors.value = false;
+    isRestarting.value = false;
   }
 
   return {
@@ -375,6 +460,9 @@ export const useSystemStore = defineStore('system', () => {
     nodeName,
     siteName,
     pubKey,
+    sensorsConfig,
+    isSavingSensors,
+    isRestarting,
 
     // Computed
     hasStats,
@@ -396,5 +484,8 @@ export const useSystemStore = defineStore('system', () => {
     updateRealtimeStats,
     reset,
     setCadCalibrationRunning,
+    fetchSensorsConfig,
+    saveSensorsConfig,
+    restartService,
   };
 });
