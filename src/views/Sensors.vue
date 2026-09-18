@@ -154,6 +154,7 @@ const availableTypes = [
   'waveshare_ups_e',
   'openhop_modem',
   'pymc_modem',
+  'network_interfaces',
 ];
 
 function openAddModal() {
