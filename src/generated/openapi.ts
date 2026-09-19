@@ -10,6 +10,21 @@
  * ---------------------------------------------------------------
  */
 
+export interface PluginStatus {
+  /** @example "openhop.nomad" */
+  id?: string;
+  name?: string;
+  version?: string;
+  enabled?: boolean;
+  state?: 'DISABLED' | 'STOPPED' | 'STARTING' | 'RUNNING' | 'STOPPING' | 'FAILED';
+  pid?: number | null;
+  has_runtime?: boolean;
+  has_ui?: boolean;
+  ui_entry?: string | null;
+  data_dir?: string;
+  description?: string;
+}
+
 export interface SuccessResponse {
   /** @example true */
   success?: boolean;
@@ -33,37 +48,6 @@ export interface NeighborScopeRecord {
   status: 'responded' | 'timeout' | 'send_failed';
   /** Epoch seconds of the most recent query */
   queried_at: number;
-}
-
-export interface AuthError {
-  /** @example false */
-  success: boolean;
-  error: string;
-  /** Machine-readable auth condition such as local_login_disabled or oidc_reauth_required. */
-  code?: string;
-}
-
-/** @example {"success":true,"local":true,"oidc":true,"oidc_provider_name":"Authentik"} */
-export interface AuthMethodsResponse {
-  /** @example true */
-  success: boolean;
-  /** Whether local web password login is available. */
-  local: boolean;
-  /** Whether OIDC login is available. */
-  oidc: boolean;
-  /** Safe display label for the configured OIDC provider. */
-  oidc_provider_name?: string | null;
-}
-
-export interface OIDCExchangeResponse {
-  /** @example true */
-  success: boolean;
-  /** Internal openHop JWT, not an upstream OIDC token. */
-  token: string;
-  /** Token expiry in seconds. */
-  expires_in: number;
-  /** Display/audit username derived from verified identity claims. */
-  username: string;
 }
 
 export interface NeighborLinkSnapshot {
@@ -117,8 +101,30 @@ export interface NeighborLinkHistoryData {
   path_hash_size?: number;
   hours?: number;
   limit?: number;
+  /** Observations, oldest first; absent when `bucket_seconds` was requested. */
   rows?: NeighborLinkHistoryRow[];
+  /** Bucket width in seconds; only when requested */
+  bucket_seconds?: number;
+  /** One summary per non-empty bucket, oldest first; only when `bucket_seconds` was requested. */
+  buckets?: NeighborLinkHistoryBucket[];
   count?: number;
+}
+
+export interface NeighborLinkHistoryBucket {
+  /** Bucket start (Unix timestamp) */
+  timestamp?: number;
+  /** The bucket's last observation */
+  last_ts?: number;
+  /** Observations in the bucket */
+  n?: number;
+  /** Observations flagged as duplicates */
+  dup?: number;
+  /** Mean score */
+  score?: number | null;
+  /** Mean RSSI */
+  rssi?: number | null;
+  /** Mean SNR */
+  snr?: number | null;
 }
 
 export interface NeighborLinkHistoryResponse {
@@ -532,13 +538,15 @@ export interface ACLClient {
    */
   address: string;
   /**
-   * Client permission level:
-   * - admin: Full access
-   * - guest: Limited access
+   * Client ACL role (low two bits of the permissions byte, matching
+   * MeshCore ClientACL.h):
+   * - admin: Full access, including settings and CLI
+   * - read_write: May send and receive messages (room server guests)
    * - read_only: Read-only access
+   * - guest: Base telemetry only (repeater guests, read-only logins)
    * @example "admin"
    */
-  permissions: 'admin' | 'guest' | 'read_only';
+  permissions: 'admin' | 'read_write' | 'read_only' | 'guest';
   /**
    * Unix timestamp of last activity
    * @example 1766065148
@@ -858,139 +866,9 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
           expires_in?: number;
           username?: string;
         },
-        void | AuthError
-      >({
-        path: `/auth/login`,
-        method: 'POST',
-        body: data,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * @description Public read-only login metadata. The response never includes issuer, client ID, client secret, callback internals, or authorization rules.
-     *
-     * @tags Authentication
-     * @name MethodsList
-     * @summary Get public authentication methods
-     * @request GET:/auth/methods
-     */
-    methodsList: (params: RequestParams = {}) =>
-      this.request<AuthMethodsResponse, any>({
-        path: `/auth/methods`,
-        method: 'GET',
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * @description Returns a short-lived, single-use opaque ticket bound to one supported SSE or WebSocket path. Browser clients use the ticket in the stream URL because native EventSource and WebSocket constructors cannot set an Authorization header. API clients that can set headers should continue using BearerAuth or ApiKeyAuth directly on the stream request.
-     *
-     * @tags Authentication
-     * @name StreamTicketCreate
-     * @summary Issue a one-time browser stream ticket
-     * @request POST:/auth/stream_ticket
-     * @secure
-     */
-    streamTicketCreate: (
-      data: {
-        /** @example "/api/gps-stream" */
-        path: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<
-        {
-          success: true;
-          ticket: string;
-          path: string;
-          /** @example 30 */
-          expires_in: number;
-        },
         void
       >({
-        path: `/auth/stream_ticket`,
-        method: 'POST',
-        body: data,
-        secure: true,
-        type: ContentType.Json,
-        format: 'json',
-        ...params,
-      }),
-
-    /**
-     * @description Public OIDC protocol endpoint. It creates one-time state, nonce, and PKCE verifier state, then redirects to the configured provider. The callback URL is derived from configured external_url, not request headers.
-     *
-     * @tags Authentication
-     * @name OidcStartList
-     * @summary Start OIDC login
-     * @request GET:/auth/oidc/start
-     */
-    oidcStartList: (
-      query: {
-        /** Existing browser client identifier to bind to the login. */
-        client_id: string;
-        /**
-         * Local absolute application path. Values beginning with // are rejected.
-         * @default "/"
-         */
-        return_to?: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<any, void | AuthError>({
-        path: `/auth/oidc/start`,
-        method: 'GET',
-        query: query,
-        ...params,
-      }),
-
-    /**
-     * @description Public OIDC protocol endpoint. It consumes the one-time state, performs the server-side authorization-code exchange, validates the ID token and configured authorization rules, creates a one-time frontend exchange code, and redirects to the login page with only that opaque exchange code. Upstream tokens and internal JWTs are never returned in the URL.
-     *
-     * @tags Authentication
-     * @name OidcCallbackList
-     * @summary Complete provider OIDC callback
-     * @request GET:/auth/oidc/callback
-     */
-    oidcCallbackList: (
-      query: {
-        /** Provider authorization code. */
-        code: string;
-        /** One-time state generated by openHop. */
-        state: string;
-        /** Provider error code. Details are not reflected to the browser. */
-        error?: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<any, void>({
-        path: `/auth/oidc/callback`,
-        method: 'GET',
-        query: query,
-        ...params,
-      }),
-
-    /**
-     * @description Public exchange endpoint protected by a short-lived, single-use code produced by the callback. It does not require an existing JWT or API token and never returns upstream OIDC tokens.
-     *
-     * @tags Authentication
-     * @name OidcExchangeCreate
-     * @summary Exchange OIDC one-time code for openHop JWT
-     * @request POST:/auth/oidc/exchange
-     */
-    oidcExchangeCreate: (
-      data: {
-        /** Opaque one-time exchange code from the callback redirect. */
-        code: string;
-        /** Existing browser client identifier bound at OIDC start. */
-        client_id: string;
-      },
-      params: RequestParams = {},
-    ) =>
-      this.request<OIDCExchangeResponse, AuthError>({
-        path: `/auth/oidc/exchange`,
+        path: `/auth/login`,
         method: 'POST',
         body: data,
         type: ContentType.Json,
@@ -1020,7 +898,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
           expires_in?: number;
           username?: string;
         },
-        AuthError
+        any
       >({
         path: `/auth/refresh`,
         method: 'POST',
@@ -1314,10 +1192,21 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @summary Send repeater advertisement
      * @request POST:/send_advert
      */
-    sendAdvertCreate: (params: RequestParams = {}) =>
+    sendAdvertCreate: (
+      data?: {
+        /**
+         * Advert send mode label for UI/workflow selection.
+         * @default "flood"
+         */
+        mode?: 'flood' | 'direct';
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<SuccessResponse, void>({
         path: `/send_advert`,
         method: 'POST',
+        body: data,
+        type: ContentType.Json,
         format: 'json',
         ...params,
       }),
@@ -1625,7 +1514,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   updateRadioConfig = {
     /**
-     * @description Update LoRa radio parameters
+     * @description Update LoRa radio parameters. In multi-radio mode, pass radio_id to target a radios[] entry; air settings are written to that entry and mirrored to top-level radio when it is the default radio.
      *
      * @tags System
      * @name UpdateRadioConfigCreate
@@ -1633,13 +1522,226 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @request POST:/update_radio_config
      * @secure
      */
-    updateRadioConfigCreate: (data: object, params: RequestParams = {}) =>
+    updateRadioConfigCreate: (
+      data: {
+        /** Optional multi-radio id from config.radios[].id */
+        radio_id?: string;
+        frequency?: number;
+        bandwidth?: number;
+        spreading_factor?: number;
+        coding_rate?: number;
+        tx_power?: number;
+        preamble_length?: number;
+        /** Repeater flood advert interval in hours (0 = off, 3-168) */
+        flood_advert_interval_hours?: number;
+        /** Legacy local advert interval in minutes (0 = off, 1-10080) */
+        advert_interval_minutes?: number;
+        /** Additional repeater advert interval in hours (0 = off, 1-168) */
+        direct_advert_interval_hours?: number;
+      },
+      params: RequestParams = {},
+    ) =>
       this.request<SuccessResponse, any>({
         path: `/update_radio_config`,
         method: 'POST',
         body: data,
         secure: true,
         type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+  };
+  sensorsTypes = {
+    /**
+     * @description Returns all registered sensor types with their settings schemas.
+     *
+     * @tags Sensors
+     * @name SensorsTypesList
+     * @summary List available sensor types
+     * @request GET:/sensors_types
+     */
+    sensorsTypesList: (params: RequestParams = {}) =>
+      this.request<
+        {
+          success?: boolean;
+          data?: {
+            types?: {
+              type?: string;
+              name?: string;
+              description?: string;
+              settings?: {
+                key?: string;
+                type?: 'string' | 'integer' | 'number';
+                label?: string;
+                default?: object;
+                help?: string;
+              }[];
+            }[];
+          };
+        },
+        any
+      >({
+        path: `/sensors_types`,
+        method: 'GET',
+        format: 'json',
+        ...params,
+      }),
+  };
+  sensorsConfig = {
+    /**
+     * @description Returns the current sensor definitions from config.yaml.
+     *
+     * @tags Sensors
+     * @name SensorsConfigList
+     * @summary Get current sensor configuration
+     * @request GET:/sensors_config
+     */
+    sensorsConfigList: (params: RequestParams = {}) =>
+      this.request<
+        {
+          success?: boolean;
+          data?: {
+            enabled?: boolean;
+            poll_interval_seconds?: number;
+            auto_install_packages?: boolean;
+            definitions?: {
+              name?: string;
+              type?: string;
+              enabled?: boolean;
+              auto_install_packages?: boolean;
+              settings?: object;
+            }[];
+          };
+        },
+        any
+      >({
+        path: `/sensors_config`,
+        method: 'GET',
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description Update sensor definitions and persist to config.yaml. Requires POST body with enabled, poll_interval_seconds, auto_install_packages, and definitions array. Always returns restart_required=true.
+     *
+     * @tags Sensors
+     * @name SensorsConfigCreate
+     * @summary Update sensor configuration
+     * @request POST:/sensors_config
+     * @secure
+     */
+    sensorsConfigCreate: (
+      data: {
+        enabled?: boolean;
+        /** @default 30 */
+        poll_interval_seconds?: number;
+        /** @default false */
+        auto_install_packages?: boolean;
+        definitions?: {
+          name: string;
+          type: string;
+          enabled?: boolean;
+          auto_install_packages?: boolean;
+          settings?: object;
+        }[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        {
+          success?: boolean;
+          data?: {
+            saved?: boolean;
+            restart_required?: boolean;
+            message?: string;
+          };
+        },
+        void
+      >({
+        path: `/sensors_config`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+  };
+  sensorsConfigUpdate = {
+    /**
+     * @description Update sensor definitions and persist to config.yaml. Uses provisioning lock. Always returns restart_required=true.
+     *
+     * @tags Sensors
+     * @name SensorsConfigUpdateCreate
+     * @summary Update sensor configuration (locked)
+     * @request POST:/sensors_config_update
+     * @secure
+     */
+    sensorsConfigUpdateCreate: (
+      data: {
+        enabled?: boolean;
+        /** @default 30 */
+        poll_interval_seconds?: number;
+        /** @default false */
+        auto_install_packages?: boolean;
+        definitions?: {
+          name: string;
+          type: string;
+          enabled?: boolean;
+          auto_install_packages?: boolean;
+          settings?: object;
+        }[];
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        {
+          success?: boolean;
+          data?: {
+            saved?: boolean;
+            restart_required?: boolean;
+            message?: string;
+          };
+        },
+        any
+      >({
+        path: `/sensors_config_update`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+  };
+  sensorsRead = {
+    /**
+     * @description Triggers an immediate read of all configured sensors and returns results.
+     *
+     * @tags Sensors
+     * @name SensorsReadCreate
+     * @summary Trigger one-shot sensor read
+     * @request POST:/sensors_read
+     */
+    sensorsReadCreate: (params: RequestParams = {}) =>
+      this.request<
+        {
+          success?: boolean;
+          data?: {
+            readings?: object[];
+            summary?: {
+              enabled?: boolean;
+              poll_interval_seconds?: number;
+              configured?: number;
+              loaded?: number;
+              running?: boolean;
+            };
+          };
+        },
+        any
+      >({
+        path: `/sensors_read`,
+        method: 'POST',
         format: 'json',
         ...params,
       }),
@@ -1884,12 +1986,17 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
          */
         hours?: number;
         /**
-         * Maximum rows to return.
+         * Maximum rows (or buckets) to return.
          * @min 1
          * @max 5000
          * @default 1000
          */
         limit?: number;
+        /**
+         * Bucket width in seconds; the answer carries `buckets` instead of `rows`.
+         * @min 60
+         */
+        bucket_seconds?: number;
       },
       params: RequestParams = {},
     ) =>
@@ -2789,8 +2896,8 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
       query: {
         session_id: string;
         last_event_id?: number;
-        /** Short-lived one-time stream ticket for EventSource clients. */
-        ticket?: string;
+        /** JWT token for EventSource clients that cannot send Authorization headers. */
+        token?: string;
       },
       params: RequestParams = {},
     ) =>
@@ -3158,6 +3265,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
            */
           node_name?: string;
           /**
+           * Room-server flood advert interval in hours (0 = off)
+           * @min 0
+           * @max 168
+           * @example 6
+           */
+          flood_advert_interval_hours?: number;
+          /**
+           * Room-server additional advert interval in hours (0 = off)
+           * @min 0
+           * @max 168
+           * @example 2
+           */
+          direct_advert_interval_hours?: number;
+          /**
            * TCP listener port (companion only)
            * @min 1
            * @max 65535
@@ -3277,7 +3398,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         new_name?: string;
         /** New identity key (optional) */
         identity_key?: string;
-        /** Updated settings */
+        /** Updated settings (room server settings may include flood_advert_interval_hours and direct_advert_interval_hours) */
         settings?: object;
       },
       params: RequestParams = {},
@@ -3602,7 +3723,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   roomPostMessage = {
     /**
-     * @description Add a new message to a room server. Message will be distributed to all synced clients. **Special author values:** - `"server"` or `"system"` - System message, goes to ALL clients (API only) - Any hex string - Normal message, NOT sent to that client **Security:** - Radio messages cannot use server key (blocked) - `server`/`system` announcements require an administrator JWT session - API tokens may post only with an explicit client public key **Rate Limits:** - 10 messages/minute per author_pubkey - 160 bytes max message length - Global 1.1s gap between transmissions
+     * @description Add a new message to a room server. Message will be distributed to all synced clients. **Special author values:** - `"server"` or `"system"` - System message, goes to ALL clients (API only) - Any hex string - Normal message, NOT sent to that client **Security:** - Radio messages cannot use server key (blocked) - API messages can use server key (for announcements) **Rate Limits:** - 10 messages/minute per author_pubkey - 160 bytes max message length - Global 1.1s gap between transmissions
      *
      * @tags Room Server
      * @name RoomPostMessageCreate
@@ -3858,15 +3979,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
      * @request GET:/needs_setup
      */
     needsSetupList: (params: RequestParams = {}) =>
-      this.request<
-        {
-          needs_setup: boolean;
-          reasons: object;
-          /** True when first-run mutations require a locally delivered bootstrap token */
-          bootstrap_required: boolean;
-        },
-        any
-      >({
+      this.request<object, any>({
         path: `/needs_setup`,
         method: 'GET',
         format: 'json',
@@ -3943,21 +4056,36 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   setupWizard = {
     /**
-     * @description Requires the one-time token from the local bootstrap-token file.
+     * No description
      *
      * @tags System
      * @name SetupWizardCreate
      * @summary Submit setup wizard payload
      * @request POST:/setup_wizard
-     * @secure
      */
     setupWizardCreate: (data: object, params: RequestParams = {}) =>
-      this.request<object, void>({
+      this.request<object, any>({
         path: `/setup_wizard`,
         method: 'POST',
         body: data,
-        secure: true,
         type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+  };
+  webFrontends = {
+    /**
+     * @description Returns built-in Repeater UI, openHop Console (if installed), and enabled application UI plugins that can be selected via web.web_path.
+     *
+     * @tags System
+     * @name WebFrontendsList
+     * @summary List selectable primary web frontends
+     * @request GET:/web_frontends
+     */
+    webFrontendsList: (params: RequestParams = {}) =>
+      this.request<object, any>({
+        path: `/web_frontends`,
+        method: 'GET',
         format: 'json',
         ...params,
       }),
@@ -4428,20 +4556,18 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   configImport = {
     /**
-     * @description Authenticated administrators may import the full supported schema. During first run, a local bootstrap token allows only repeater node_name, latitude, and longitude.
+     * No description
      *
      * @tags System
      * @name ConfigImportCreate
      * @summary Import configuration
      * @request POST:/config_import
-     * @secure
      */
     configImportCreate: (data: object, params: RequestParams = {}) =>
-      this.request<object, void>({
+      this.request<object, any>({
         path: `/config_import`,
         method: 'POST',
         body: data,
-        secure: true,
         type: ContentType.Json,
         format: 'json',
         ...params,
@@ -5128,6 +5254,605 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         secure: true,
         type: ContentType.Json,
         format: 'json',
+        ...params,
+      }),
+  };
+  plugins = {
+    /**
+     * @description List plugins installed by the local plugin manager. Returns 503 when the plugin manager process is not running.
+     *
+     * @tags Plugins
+     * @name PluginsList
+     * @summary List installed plugins
+     * @request GET:/plugins
+     * @secure
+     */
+    pluginsList: (params: RequestParams = {}) =>
+      this.request<
+        {
+          success?: boolean;
+          plugins?: PluginStatus[];
+        },
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description Fetch the curated openHop plugin catalogue and annotate entries with install state and the currently approved catalogue version. Failures contacting the R2 catalogue do not affect installed plugins.
+     *
+     * @tags Plugins
+     * @name CatalogueList
+     * @summary List curated plugin catalogue
+     * @request GET:/plugins/catalogue
+     */
+    catalogueList: (
+      query?: {
+        /** Force refresh of the catalogue cache */
+        refresh?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/catalogue`,
+        method: 'GET',
+        query: query,
+        ...params,
+      }),
+
+    /**
+     * @description Download the exact GitHub Release wheel approved by the R2 catalogue version and SHA-256, verify its manifest, install it, and enable the plugin.
+     *
+     * @tags Plugins
+     * @name CatalogueInstallCreate
+     * @summary Install a plugin from the catalogue
+     * @request POST:/plugins/catalogue_install
+     */
+    catalogueInstallCreate: (
+      data: {
+        id: string;
+        /** Optional assertion of the currently approved version */
+        version?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/catalogue_install`,
+        method: 'POST',
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name UpdatesList
+     * @summary Check plugin update availability
+     * @request GET:/plugins/updates
+     */
+    updatesList: (
+      query: {
+        id: string;
+        refresh?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/updates`,
+        method: 'GET',
+        query: query,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name UpdateCreate
+     * @summary Update an installed plugin to the approved catalogue version
+     * @request POST:/plugins/update
+     */
+    updateCreate: (
+      data: {
+        id: string;
+        version?: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/update`,
+        method: 'POST',
+        body: data,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * @description Server-sent events for a plugin's last catalogue install or update, as /update/progress streams the repeater's own updater. JSON events: `connected`, `line`, `status` (idle, running, complete, error), `keepalive`, and one `done` that ends the stream. Idle streams end after a minute. Uploaded wheels are not reported.
+     *
+     * @tags Plugins
+     * @name ProgressList
+     * @summary Stream an install or update's progress
+     * @request GET:/plugins/progress
+     * @secure
+     */
+    progressList: (
+      query: {
+        id: string;
+        /**
+         * Resume from this line index
+         * @default 0
+         */
+        since?: number;
+        /**
+         * Ignore a log already finished when the stream opens; wait for the next operation.
+         * @default false
+         */
+        fresh?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        string,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/progress`,
+        method: 'GET',
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * @description Read the opaque plugin-owned data/config.json object.
+     *
+     * @tags Plugins
+     * @name SettingsList
+     * @summary Get plugin config.json
+     * @request GET:/plugins/settings
+     * @secure
+     */
+    settingsList: (
+      query: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/settings`,
+        method: 'GET',
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * @description Replace plugin-owned data/config.json with a JSON object. Optional restart applies to enabled service plugins.
+     *
+     * @tags Plugins
+     * @name SettingsCreate
+     * @summary Set plugin config.json
+     * @request POST:/plugins/settings
+     * @secure
+     */
+    settingsCreate: (
+      data: {
+        id: string;
+        config: Record<string, any>;
+        /** @default false */
+        restart?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/settings`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * @description Read the plugin-owned data/runtime.json object.
+     *
+     * @tags Plugins
+     * @name RuntimeList
+     * @summary Get plugin runtime.json
+     * @request GET:/plugins/runtime
+     * @secure
+     */
+    runtimeList: (
+      query: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/runtime`,
+        method: 'GET',
+        query: query,
+        secure: true,
+        ...params,
+      }),
+
+    /**
+     * @description Install a Python wheel containing openhop-plugin.json into an isolated virtualenv. Accepts multipart field `wheel` or JSON `wheel_path`.
+     *
+     * @tags Plugins
+     * @name InstallCreate
+     * @summary Install a local plugin wheel
+     * @request POST:/plugins/install
+     * @secure
+     */
+    installCreate: (
+      data: {
+        /** @format binary */
+        wheel?: File;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/install`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.FormData,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name EnableCreate
+     * @summary Enable a plugin
+     * @request POST:/plugins/enable
+     * @secure
+     */
+    enableCreate: (
+      data: {
+        /** @example "openhop.nomad" */
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/enable`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name DisableCreate
+     * @summary Disable a plugin
+     * @request POST:/plugins/disable
+     * @secure
+     */
+    disableCreate: (
+      data: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/disable`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name StartCreate
+     * @summary Start a plugin process
+     * @request POST:/plugins/start
+     * @secure
+     */
+    startCreate: (
+      data: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/start`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name StopCreate
+     * @summary Stop a plugin process
+     * @request POST:/plugins/stop
+     * @secure
+     */
+    stopCreate: (
+      data: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/stop`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name RestartCreate
+     * @summary Restart a plugin process
+     * @request POST:/plugins/restart
+     * @secure
+     */
+    restartCreate: (
+      data: {
+        id: string;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/restart`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name LogsList
+     * @summary Tail plugin logs
+     * @request GET:/plugins/logs
+     * @secure
+     */
+    logsList: (
+      query: {
+        id: string;
+        /** @default 200 */
+        tail?: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        {
+          success?: boolean;
+          id?: string;
+          lines?: string[];
+        },
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/logs`,
+        method: 'GET',
+        query: query,
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * @description Stops the plugin and removes release code. Keeps data/ unless delete_data is true.
+     *
+     * @tags Plugins
+     * @name UninstallCreate
+     * @summary Uninstall a plugin
+     * @request POST:/plugins/uninstall
+     * @secure
+     */
+    uninstallCreate: (
+      data: {
+        id: string;
+        /** @default false */
+        delete_data?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/uninstall`,
+        method: 'POST',
+        body: data,
+        secure: true,
+        type: ContentType.Json,
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name PluginsDetail
+     * @summary Get plugin status
+     * @request GET:/plugins/{id}
+     * @secure
+     */
+    pluginsDetail: (id: string, params: RequestParams = {}) =>
+      this.request<
+        {
+          success?: boolean;
+        } & PluginStatus,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/${id}`,
+        method: 'GET',
+        secure: true,
+        format: 'json',
+        ...params,
+      }),
+
+    /**
+     * No description
+     *
+     * @tags Plugins
+     * @name PluginsDelete
+     * @summary Uninstall plugin by id
+     * @request DELETE:/plugins/{id}
+     * @secure
+     */
+    pluginsDelete: (
+      id: string,
+      query?: {
+        /** @default false */
+        delete_data?: boolean;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        void,
+        void | {
+          success: false;
+          error: string;
+          outcome: 'unknown';
+        }
+      >({
+        path: `/plugins/${id}`,
+        method: 'DELETE',
+        query: query,
+        secure: true,
         ...params,
       }),
   };
