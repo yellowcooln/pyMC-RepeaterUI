@@ -59,10 +59,33 @@ const summaryCards = computed(() => {
   }
 
   return [
-    { label: 'Enabled', value: s.enabled ? 'Yes' : 'No', icon: 'power', color: s.enabled ? 'green' : 'red' },
-    { label: 'Running', value: s.running ? 'Yes' : 'No', icon: 'activity', color: s.running ? 'green' : 'red' },
-    { label: 'Configured / Loaded', value: `${s.configured ?? 0} / ${s.loaded ?? 0}`, icon: 'settings', color: 'blue' },
-    { label: 'Poll Interval', value: typeof s.poll_interval_seconds === 'number' ? `${s.poll_interval_seconds.toFixed(1)}s` : 'n/a', icon: 'clock', color: 'purple' },
+    {
+      label: 'Enabled',
+      value: s.enabled ? 'Yes' : 'No',
+      icon: 'power',
+      color: s.enabled ? 'green' : 'red',
+    },
+    {
+      label: 'Running',
+      value: s.running ? 'Yes' : 'No',
+      icon: 'activity',
+      color: s.running ? 'green' : 'red',
+    },
+    {
+      label: 'Configured / Loaded',
+      value: `${s.configured ?? 0} / ${s.loaded ?? 0}`,
+      icon: 'settings',
+      color: 'blue',
+    },
+    {
+      label: 'Poll Interval',
+      value:
+        typeof s.poll_interval_seconds === 'number'
+          ? `${s.poll_interval_seconds.toFixed(1)}s`
+          : 'n/a',
+      icon: 'clock',
+      color: 'purple',
+    },
   ];
 });
 
@@ -120,7 +143,9 @@ const formatMetric = (key: string, value: unknown): string => {
     try {
       const d = new Date(value);
       if (!Number.isNaN(d.getTime())) return d.toLocaleTimeString();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return String(value);
   }
 
@@ -170,7 +195,9 @@ watch(
     <div class="glass-card rounded-[15px] p-4 sm:p-6">
       <div class="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 class="text-ui-title sm:text-ui-title-lg font-semibold text-content-heading">Sensors</h1>
+          <h1 class="text-ui-title sm:text-ui-title-lg font-semibold text-content-heading">
+            Sensors
+          </h1>
           <p class="mt-1 text-ui-label sm:text-ui-body text-content-muted">
             Live sensor data and system overview.
           </p>
@@ -226,10 +253,14 @@ watch(
         class="glass-card rounded-[15px] p-4 sm:p-5"
       >
         <!-- Type header -->
-        <div class="flex items-center gap-2 mb-3 pb-2 border-b border-stroke-subtle dark:border-stroke/opacity-light">
+        <div
+          class="flex items-center gap-2 mb-3 pb-2 border-b border-stroke-subtle dark:border-stroke/opacity-light"
+        >
           <span class="text-sm font-semibold text-content-primary">{{ typeKey }}</span>
           <span class="text-xs px-2 py-0.5 rounded-full bg-primary/opacity-light text-primary">
-            {{ readingsByType[typeKey].length }} sensor{{ readingsByType[typeKey].length > 1 ? 's' : '' }}
+            {{ readingsByType[typeKey].length }} sensor{{
+              readingsByType[typeKey].length > 1 ? 's' : ''
+            }}
           </span>
         </div>
 
@@ -248,9 +279,11 @@ watch(
                 </h3>
                 <span
                   class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                  :class="reading.ok
-                    ? 'bg-accent-green/opacity-light text-accent-green dark:bg-accent-green/opacity-medium dark:text-accent-green'
-                    : 'bg-accent-red/opacity-light text-accent-red dark:bg-accent-red/opacity-medium dark:text-accent-red'"
+                  :class="
+                    reading.ok
+                      ? 'bg-accent-green/opacity-light text-accent-green dark:bg-accent-green/opacity-medium dark:text-accent-green'
+                      : 'bg-accent-red/opacity-light text-accent-red dark:bg-accent-red/opacity-medium dark:text-accent-red'
+                  "
                 >
                   {{ reading.ok ? 'OK' : 'Error' }}
                 </span>
@@ -264,14 +297,21 @@ watch(
             </div>
 
             <!-- Metrics grid -->
-            <div v-if="reading.data && Object.keys(reading.data).length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div
+              v-if="reading.data && Object.keys(reading.data).length > 0"
+              class="grid grid-cols-2 sm:grid-cols-3 gap-2"
+            >
               <div
                 v-for="(value, key) in reading.data"
                 :key="key"
                 class="rounded-md bg-black/opacity-light dark:bg-white/opacity-subtle p-2"
               >
-                <p class="text-[10px] uppercase tracking-wide text-content-muted truncate">{{ key }}</p>
-                <p class="text-sm font-mono text-content-heading mt-0.5">{{ formatMetric(key, value) }}</p>
+                <p class="text-[10px] uppercase tracking-wide text-content-muted truncate">
+                  {{ key }}
+                </p>
+                <p class="text-sm font-mono text-content-heading mt-0.5">
+                  {{ formatMetric(key, value) }}
+                </p>
               </div>
             </div>
           </div>

@@ -23,7 +23,10 @@ import Spinner from '@/components/ui/Spinner.vue';
 
 defineOptions({ name: 'ConfigurationView' });
 
-type EditableTabRef = ComponentPublicInstance & { requestLeave: (cb: () => void) => void; isEditing: Ref<boolean> | boolean };
+type EditableTabRef = ComponentPublicInstance & {
+  requestLeave: (cb: () => void) => void;
+  isEditing: Ref<boolean> | boolean;
+};
 
 const route = useRoute();
 const systemStore = useSystemStore();
@@ -36,28 +39,28 @@ const initialLoadComplete = ref(false);
 
 // ── Editable tab refs (for unsaved-changes guard) ─────────────────────────────
 
-const radioRef          = ref<EditableTabRef | null>(null);
-const radioHardwareRef  = ref<EditableTabRef | null>(null);
-const repeaterRef       = ref<EditableTabRef | null>(null);
-const advertRef         = ref<EditableTabRef | null>(null);
-const dutyRef           = ref<EditableTabRef | null>(null);
-const delaysRef         = ref<EditableTabRef | null>(null);
-const transportRef      = ref<EditableTabRef | null>(null);
-const letsMeshRef       = ref<EditableTabRef | null>(null);
-const policyRef         = ref<EditableTabRef | null>(null);
-const sensorRef         = ref<EditableTabRef | null>(null);
+const radioRef = ref<EditableTabRef | null>(null);
+const radioHardwareRef = ref<EditableTabRef | null>(null);
+const repeaterRef = ref<EditableTabRef | null>(null);
+const advertRef = ref<EditableTabRef | null>(null);
+const dutyRef = ref<EditableTabRef | null>(null);
+const delaysRef = ref<EditableTabRef | null>(null);
+const transportRef = ref<EditableTabRef | null>(null);
+const letsMeshRef = ref<EditableTabRef | null>(null);
+const policyRef = ref<EditableTabRef | null>(null);
+const sensorRef = ref<EditableTabRef | null>(null);
 
 const editableTabRefs: Record<string, Ref<EditableTabRef | null>> = {
-  radio:           radioRef,
+  radio: radioRef,
   'radio-hardware': radioHardwareRef,
-  repeater:        repeaterRef,
-  advert:          advertRef,
-  duty:            dutyRef,
-  delays:          delaysRef,
-  transport:       transportRef,
-  observer:        letsMeshRef,
-  policy:          policyRef,
-  sensormanager:   sensorRef,
+  repeater: repeaterRef,
+  advert: advertRef,
+  duty: dutyRef,
+  delays: delaysRef,
+  transport: transportRef,
+  observer: letsMeshRef,
+  policy: policyRef,
+  sensormanager: sensorRef,
 };
 
 function isCurrentTabEditing(): boolean {
@@ -79,9 +82,21 @@ function requestCurrentTabLeave(callback: () => void) {
 // ── Route → active tab ────────────────────────────────────────────────────────
 
 const VALID_TABS = new Set([
-  'radio', 'radio-hardware', 'repeater', 'duty', 'delays',
-  'advert', 'transport', 'api-tokens', 'web', 'observer', 'policy-engine',
-  'backup', 'database', 'memory', 'sensormanager',
+  'radio',
+  'radio-hardware',
+  'repeater',
+  'duty',
+  'delays',
+  'advert',
+  'transport',
+  'api-tokens',
+  'web',
+  'observer',
+  'policy-engine',
+  'backup',
+  'database',
+  'memory',
+  'sensormanager',
 ]);
 
 function resolveTab(queryTab: string | undefined): string {
@@ -98,7 +113,10 @@ watch(activeTab, (val) => setPreference('configuration_activeTab', val));
 // Guard against unsaved changes before allowing the switch.
 onBeforeRouteUpdate((to, _from, next) => {
   const incoming = resolveTab(to.query.tab as string | undefined);
-  if (incoming === activeTab.value) { next(); return; }
+  if (incoming === activeTab.value) {
+    next();
+    return;
+  }
 
   if (isCurrentTabEditing()) {
     requestCurrentTabLeave(() => {
@@ -138,19 +156,28 @@ onMounted(async () => {
         <h1 class="text-ui-title sm:text-ui-title-lg font-bold text-content-primary">
           Configuration
         </h1>
-        <p class="text-content-secondary dark:text-content-muted mt-1 sm:mt-2 text-ui-label sm:text-ui-body">
+        <p
+          class="text-content-secondary dark:text-content-muted mt-1 sm:mt-2 text-ui-label sm:text-ui-body"
+        >
           System configuration and settings
         </p>
       </div>
 
       <!-- CAD Calibration Tool Banner — shown only when no calibration is saved yet -->
       <router-link
-        v-if="initialLoadComplete && !(systemStore.stats?.config?.radio as any)?.cad?.peak_threshold"
+        v-if="
+          initialLoadComplete && !(systemStore.stats?.config?.radio as any)?.cad?.peak_threshold
+        "
         to="/cad-calibration"
         class="flex-shrink-0 flex items-center gap-4 px-5 py-3 min-w-[280px] rounded-xl border border-primary/opacity-medium bg-primary/opacity-light text-primary hover:bg-primary/opacity-medium transition-colors"
       >
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 10V3L4 14h7v7l9-11h-7z"
+          />
         </svg>
         <div>
           <div class="text-sm font-semibold">CAD Calibration Available</div>
@@ -188,21 +215,37 @@ onMounted(async () => {
 
       <!-- Active panel -->
       <div v-else class="min-h-[400px]">
-        <RadioSettings          v-if="activeTab === 'radio'"         ref="radioRef"         key="radio-settings" />
-        <RadioHardwareSettings  v-if="activeTab === 'radio-hardware'" ref="radioHardwareRef" key="radio-hardware-settings" />
-        <RepeaterSettings       v-if="activeTab === 'repeater'"      ref="repeaterRef"      key="repeater-settings" />
-        <AdvertSettings         v-if="activeTab === 'advert'"        ref="advertRef"        key="advert-settings" />
-        <DutyCycle              v-if="activeTab === 'duty'"          ref="dutyRef"          key="duty-cycle" />
-        <TransmissionDelays     v-if="activeTab === 'delays'"        ref="delaysRef"        key="transmission-delays" />
-        <TransportKeys          v-if="activeTab === 'transport'"     ref="transportRef"     key="transport-keys" />
-        <APITokens              v-if="activeTab === 'api-tokens'"                           key="api-tokens" />
-        <WebSettings            v-if="activeTab === 'web'"                                  key="web-settings" />
-        <LetsMeshSettings       v-if="activeTab === 'observer'"      ref="letsMeshRef"      key="letsmesh-settings" />
-        <PolicyEngineSettings   v-if="activeTab === 'policy-engine'"                        key="policy-engine" />
-        <BackupRestore          v-if="activeTab === 'backup'"                               key="backup-restore" />
-        <DatabaseManagement     v-if="activeTab === 'database'"                             key="database-management" />
-        <MemoryDebug            v-if="activeTab === 'memory'"                               key="memory-debug" />
-        <SensorManagerSettings  v-if="activeTab === 'sensormanager'"                        key="sensor-manager" />
+        <RadioSettings v-if="activeTab === 'radio'" ref="radioRef" key="radio-settings" />
+        <RadioHardwareSettings
+          v-if="activeTab === 'radio-hardware'"
+          ref="radioHardwareRef"
+          key="radio-hardware-settings"
+        />
+        <RepeaterSettings
+          v-if="activeTab === 'repeater'"
+          ref="repeaterRef"
+          key="repeater-settings"
+        />
+        <AdvertSettings v-if="activeTab === 'advert'" ref="advertRef" key="advert-settings" />
+        <DutyCycle v-if="activeTab === 'duty'" ref="dutyRef" key="duty-cycle" />
+        <TransmissionDelays
+          v-if="activeTab === 'delays'"
+          ref="delaysRef"
+          key="transmission-delays"
+        />
+        <TransportKeys v-if="activeTab === 'transport'" ref="transportRef" key="transport-keys" />
+        <APITokens v-if="activeTab === 'api-tokens'" key="api-tokens" />
+        <WebSettings v-if="activeTab === 'web'" key="web-settings" />
+        <LetsMeshSettings
+          v-if="activeTab === 'observer'"
+          ref="letsMeshRef"
+          key="letsmesh-settings"
+        />
+        <PolicyEngineSettings v-if="activeTab === 'policy-engine'" key="policy-engine" />
+        <BackupRestore v-if="activeTab === 'backup'" key="backup-restore" />
+        <DatabaseManagement v-if="activeTab === 'database'" key="database-management" />
+        <MemoryDebug v-if="activeTab === 'memory'" key="memory-debug" />
+        <SensorManagerSettings v-if="activeTab === 'sensormanager'" key="sensor-manager" />
       </div>
     </div>
   </div>

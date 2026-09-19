@@ -225,12 +225,8 @@ async function saveAll(): Promise<boolean> {
   }
 }
 
-const { showUnsavedModal, requestLeave, handleDiscard, handleSave, handleCancel } = useUnsavedChanges(
-  isEditing,
-  isSaving,
-  cancelEditing,
-  saveAll,
-);
+const { showUnsavedModal, requestLeave, handleDiscard, handleSave, handleCancel } =
+  useUnsavedChanges(isEditing, isSaving, cancelEditing, saveAll);
 
 defineExpose({ requestLeave, isEditing });
 
@@ -267,29 +263,20 @@ watch(
     <!-- Header -->
     <div class="cfg-page-heading flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div>
-        <h3 class="text-base sm:text-lg font-semibold text-content-primary mb-1 sm:mb-2">Sensor Manager</h3>
+        <h3 class="text-base sm:text-lg font-semibold text-content-primary mb-1 sm:mb-2">
+          Sensor Manager
+        </h3>
         <p class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">
           Configure and manage I2C sensors — add, edit, enable, or disable sensor definitions.
         </p>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <template v-if="!isEditing">
-          <button @click="startEditing" class="cfg-btn-primary">
-            Edit Sensors
-          </button>
+          <button @click="startEditing" class="cfg-btn-primary">Edit Sensors</button>
         </template>
         <template v-else>
-          <button
-            @click="saveDraft"
-            class="cfg-btn-secondary"
-          >
-            Discard
-          </button>
-          <button
-            @click="saveAll"
-            :disabled="isSaving"
-            class="cfg-btn-primary"
-          >
+          <button @click="saveDraft" class="cfg-btn-secondary">Discard</button>
+          <button @click="saveAll" :disabled="isSaving" class="cfg-btn-primary">
             {{ isSaving ? 'Saving...' : 'Save Changes' }}
           </button>
         </template>
@@ -297,7 +284,10 @@ watch(
     </div>
 
     <!-- Error -->
-    <div v-if="error" class="bg-accent-red/opacity-light dark:bg-accent-red/opacity-medium border border-accent-red/opacity-heavy rounded-lg p-3">
+    <div
+      v-if="error"
+      class="bg-accent-red/opacity-light dark:bg-accent-red/opacity-medium border border-accent-red/opacity-heavy rounded-lg p-3"
+    >
       <p class="text-accent-red text-sm">{{ error }}</p>
     </div>
 
@@ -309,12 +299,15 @@ watch(
     <!-- Non-editing view -->
     <template v-if="!isEditing && !loading && config">
       <!-- Global settings -->
-      <div class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-4">
+      <div
+        class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-4"
+      >
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm font-semibold text-content-primary">Sensor Manager</div>
             <div class="text-xs text-content-muted mt-0.5">
-              {{ config.enabled ? 'Enabled' : 'Disabled' }} · {{ config.definitions.length }} configured
+              {{ config.enabled ? 'Enabled' : 'Disabled' }} ·
+              {{ config.definitions.length }} configured
             </div>
           </div>
           <label class="flex items-center gap-2 cursor-pointer">
@@ -329,15 +322,22 @@ watch(
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs text-content-muted">Poll interval:</span>
-          <span class="text-sm font-mono text-content-primary">{{ config.poll_interval_seconds }}s</span>
+          <span class="text-sm font-mono text-content-primary"
+            >{{ config.poll_interval_seconds }}s</span
+          >
         </div>
       </div>
 
       <!-- Sensor list -->
-      <div class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-3">
+      <div
+        class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-3"
+      >
         <div class="text-sm font-semibold text-content-primary">Configured Sensors</div>
 
-        <div v-if="config.definitions.length === 0" class="text-xs text-content-muted py-4 text-center">
+        <div
+          v-if="config.definitions.length === 0"
+          class="text-xs text-content-muted py-4 text-center"
+        >
           No sensors configured. Click "Edit Sensors" to add one.
         </div>
 
@@ -349,14 +349,18 @@ watch(
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <span class="font-semibold text-content-primary text-sm">{{ def.name }}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-primary/opacity-light text-primary font-mono">
+              <span
+                class="text-xs px-2 py-0.5 rounded-full bg-primary/opacity-light text-primary font-mono"
+              >
                 {{ def.type }}
               </span>
               <span
                 class="text-[10px] px-2 py-0.5 rounded-full"
-                :class="def.enabled
-                  ? 'bg-accent-green/opacity-light text-accent-green dark:bg-accent-green/opacity-medium dark:text-accent-green'
-                  : 'bg-accent-amber/opacity-light text-accent-amber dark:bg-accent-amber/opacity-medium dark:text-accent-amber'"
+                :class="
+                  def.enabled
+                    ? 'bg-accent-green/opacity-light text-accent-green dark:bg-accent-green/opacity-medium dark:text-accent-green'
+                    : 'bg-accent-amber/opacity-light text-accent-amber dark:bg-accent-amber/opacity-medium dark:text-accent-amber'
+                "
               >
                 {{ def.enabled ? 'Enabled' : 'Disabled' }}
               </span>
@@ -372,16 +376,14 @@ watch(
     <!-- Editing view -->
     <template v-if="isEditing && !loading && draftConfig">
       <!-- Global settings -->
-      <div class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-4">
+      <div
+        class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-4"
+      >
         <div class="text-sm font-semibold text-content-primary">Global Settings</div>
 
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              v-model="draftConfig.enabled"
-              class="w-4 h-4 accent-primary"
-            />
+            <input type="checkbox" v-model="draftConfig.enabled" class="w-4 h-4 accent-primary" />
             <span class="text-sm text-content-primary">Enable sensor manager</span>
           </label>
         </div>
@@ -399,37 +401,30 @@ watch(
       </div>
 
       <!-- Sensor list with add/edit/delete -->
-      <div class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-3">
+      <div
+        class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-4 sm:p-5 space-y-3"
+      >
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div class="text-sm font-semibold text-content-primary">Configured Sensors</div>
-          <button
-            v-if="!showAddForm"
-            @click="beginAddSensor"
-            class="cfg-btn-primary text-xs"
-          >
+          <button v-if="!showAddForm" @click="beginAddSensor" class="cfg-btn-primary text-xs">
             + Add Sensor
           </button>
         </div>
 
         <!-- Add sensor form -->
         <Transition name="fade">
-          <div v-if="showAddForm" class="rounded-lg border border-primary/opacity-heavy bg-primary/opacity-light p-4 space-y-3">
+          <div
+            v-if="showAddForm"
+            class="rounded-lg border border-primary/opacity-heavy bg-primary/opacity-light p-4 space-y-3"
+          >
             <div class="text-sm font-semibold text-content-primary">Add New Sensor</div>
 
             <!-- Type selector -->
             <div class="flex flex-col sm:flex-row sm:items-center gap-2">
               <label class="text-xs text-content-muted sm:w-32">Sensor type:</label>
-              <select
-                v-model="selectedNewType"
-                class="cfg-select flex-1"
-                @change="onTypeSelected"
-              >
+              <select v-model="selectedNewType" class="cfg-select flex-1" @change="onTypeSelected">
                 <option value="">— Select type —</option>
-                <option
-                  v-for="t in availableTypes"
-                  :key="t.type"
-                  :value="t.type"
-                >
+                <option v-for="t in availableTypes" :key="t.type" :value="t.type">
                   {{ t.name }} ({{ t.type }})
                 </option>
               </select>
@@ -457,14 +452,22 @@ watch(
               >
                 <label class="text-xs text-content-muted sm:w-48">
                   {{ setting.label }}
-                  <span v-if="setting.help" class="block text-[10px] text-content-muted mt-0.5">{{ setting.help }}</span>
+                  <span v-if="setting.help" class="block text-[10px] text-content-muted mt-0.5">{{
+                    setting.help
+                  }}</span>
                 </label>
                 <input
                   v-model="newSensorSettings[setting.key]"
-                  :type="setting.type === 'integer' || setting.type === 'number' ? 'number' : 'text'"
+                  :type="
+                    setting.type === 'integer' || setting.type === 'number' ? 'number' : 'text'
+                  "
                   :step="setting.type === 'number' ? '0.01' : '1'"
-                  :min="setting.type === 'integer' || setting.type === 'number' ? '-999999' : undefined"
-                  :max="setting.type === 'integer' || setting.type === 'number' ? '999999' : undefined"
+                  :min="
+                    setting.type === 'integer' || setting.type === 'number' ? '-999999' : undefined
+                  "
+                  :max="
+                    setting.type === 'integer' || setting.type === 'number' ? '999999' : undefined
+                  "
                   class="cfg-input flex-1"
                   :placeholder="String(setting.default)"
                 />
@@ -480,7 +483,12 @@ watch(
                 Add
               </button>
               <button
-                @click="() => { showAddForm = false; resetAddForm(); }"
+                @click="
+                  () => {
+                    showAddForm = false;
+                    resetAddForm();
+                  }
+                "
                 class="cfg-btn-secondary text-xs"
               >
                 Cancel
@@ -501,7 +509,9 @@ watch(
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
                   <span class="font-semibold text-content-primary text-sm">{{ def.name }}</span>
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-primary/opacity-light text-primary font-mono">
+                  <span
+                    class="text-xs px-2 py-0.5 rounded-full bg-primary/opacity-light text-primary font-mono"
+                  >
                     {{ def.type }}
                   </span>
                   <label class="flex items-center gap-1 cursor-pointer text-xs">
@@ -517,10 +527,7 @@ watch(
                   </label>
                 </div>
                 <div class="flex items-center gap-1">
-                  <button
-                    @click="beginEditSensor(idx)"
-                    class="cfg-btn-secondary text-xs px-2 py-1"
-                  >
+                  <button @click="beginEditSensor(idx)" class="cfg-btn-secondary text-xs px-2 py-1">
                     Edit
                   </button>
                   <button
@@ -540,20 +547,11 @@ watch(
             <div v-else class="space-y-2">
               <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                 <label class="text-xs text-content-muted sm:w-24">Name:</label>
-                <input
-                  v-model="editDraft!.name"
-                  type="text"
-                  class="cfg-input flex-1"
-                />
+                <input v-model="editDraft!.name" type="text" class="cfg-input flex-1" />
               </div>
               <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                 <label class="text-xs text-content-muted sm:w-24">Type:</label>
-                <input
-                  :value="editDraft!.type"
-                  type="text"
-                  disabled
-                  class="cfg-input flex-1"
-                />
+                <input :value="editDraft!.type" type="text" disabled class="cfg-input flex-1" />
               </div>
               <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                 <label class="text-xs text-content-muted sm:w-24">Enabled:</label>
@@ -578,23 +576,16 @@ watch(
                 </div>
               </div>
               <div class="flex items-center gap-2 pt-2">
-                <button
-                  @click="saveEditSensor"
-                  class="cfg-btn-primary text-xs"
-                >
-                  Save
-                </button>
-                <button
-                  @click="cancelEditSensor"
-                  class="cfg-btn-secondary text-xs"
-                >
-                  Cancel
-                </button>
+                <button @click="saveEditSensor" class="cfg-btn-primary text-xs">Save</button>
+                <button @click="cancelEditSensor" class="cfg-btn-secondary text-xs">Cancel</button>
               </div>
             </div>
           </div>
 
-          <div v-if="draftConfig.definitions.length === 0" class="text-xs text-content-muted py-4 text-center">
+          <div
+            v-if="draftConfig.definitions.length === 0"
+            class="text-xs text-content-muted py-4 text-center"
+          >
             No sensors configured. Click "+ Add Sensor" to add one.
           </div>
         </div>

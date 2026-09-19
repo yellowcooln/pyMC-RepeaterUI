@@ -1,13 +1,7 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { RequestParams } from '@/generated/openapi';
-import {
-  getToken,
-  isTokenExpired,
-  shouldRefreshToken,
-  setToken,
-  getClientId,
-} from './auth';
+import { getToken, isTokenExpired, shouldRefreshToken, setToken, getClientId } from './auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import type {
   GPSDiagnostics,
@@ -21,8 +15,9 @@ import type {
 } from '@/types/api';
 import { generatedApiClient } from '@/services/api/generatedClient';
 
-type GeneratedEndpointData<T extends (...args: any[]) => Promise<{ data: any }>> =
-  Awaited<ReturnType<T>>['data'];
+type GeneratedEndpointData<T extends (...args: any[]) => Promise<{ data: any }>> = Awaited<
+  ReturnType<T>
+>['data'];
 
 type EndpointDataPayload<T extends (...args: any[]) => Promise<{ data: any }>> =
   GeneratedEndpointData<T> extends { data?: infer D } ? D : never;
@@ -38,7 +33,9 @@ type AclClientsResponse = EndpointApiResponse<
 type AclRemoveClientResponse = EndpointApiResponse<
   (typeof generatedApiClient)['aclRemoveClient']['aclRemoveClientCreate']
 >;
-type AclStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['aclStats']['aclStatsList']>;
+type AclStatsResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['aclStats']['aclStatsList']
+>;
 type RoomMessagesResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessages']['roomMessagesList']
 >;
@@ -48,7 +45,9 @@ type RoomPostMessageResponse = EndpointApiResponse<
 type RoomMessagesClearResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessagesClear']['roomMessagesClearDelete']
 >;
-type RoomStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['roomStats']['roomStatsList']>;
+type RoomStatsResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['roomStats']['roomStatsList']
+>;
 type RoomClientsResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomClients']['roomClientsList']
 >;
@@ -92,9 +91,15 @@ type UpdateDefaultRegionResponse = EndpointApiResponse<
 >;
 type PolicyDocumentResponse = ApiResponse<PolicyDocumentData>;
 type PolicyValidationResponse = ApiResponse<PolicyValidationResult>;
-type DeleteAdvertResponse = EndpointApiResponse<(typeof generatedApiClient)['advert']['advertDelete']>;
-type IdentitiesResponse = EndpointApiResponse<(typeof generatedApiClient)['identities']['identitiesList']>;
-type IdentityResponse = EndpointApiResponse<(typeof generatedApiClient)['identity']['identityList']>;
+type DeleteAdvertResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['advert']['advertDelete']
+>;
+type IdentitiesResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['identities']['identitiesList']
+>;
+type IdentityResponse = EndpointApiResponse<
+  (typeof generatedApiClient)['identity']['identityList']
+>;
 type CreateIdentityResponse = EndpointApiResponse<
   (typeof generatedApiClient)['createIdentity']['createIdentityCreate']
 >;
@@ -323,11 +328,15 @@ authClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
+      const requestToken = (
+        error.config?.headers?.['Authorization'] as string | undefined
+      )?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
+        void appRuntime.handleAuthFailure(
+          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
+        );
       }
     }
 
@@ -384,11 +393,15 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
+      const requestToken = (
+        error.config?.headers?.['Authorization'] as string | undefined
+      )?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
+        void appRuntime.handleAuthFailure(
+          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
+        );
       }
     }
 
@@ -553,7 +566,10 @@ export class ApiService {
   }): Promise<NeighborLinksResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinks.neighborLinksList(params, requestParams);
+      const response = await generatedApiClient.neighborLinks.neighborLinksList(
+        params,
+        requestParams,
+      );
       return response.data as NeighborLinksApiResponse as NeighborLinksResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -571,10 +587,13 @@ export class ApiService {
   ): Promise<NeighborLinkHistoryResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(params, {
-        ...requestParams,
-        signal: config?.signal as AbortSignal | undefined,
-      });
+      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(
+        params,
+        {
+          ...requestParams,
+          signal: config?.signal as AbortSignal | undefined,
+        },
+      );
       return response.data as NeighborLinkHistoryApiResponse as NeighborLinkHistoryResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -741,14 +760,19 @@ export class ApiService {
   }): Promise<PolicyValidationResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyValidate.policyValidateCreate(payload, params);
+      const response = await generatedApiClient.policyValidate.policyValidateCreate(
+        payload,
+        params,
+      );
       return response.data as PolicyValidationResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
     }
   }
 
-  static async getPolicyGroups(kind?: PolicyGroupKind): Promise<ApiResponse<Record<string, unknown>>> {
+  static async getPolicyGroups(
+    kind?: PolicyGroupKind,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
       const response = await generatedApiClient.policyGroups.policyGroupsList(
@@ -799,7 +823,10 @@ export class ApiService {
   }): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(data, params);
+      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(
+        data,
+        params,
+      );
       return response.data as ApiResponse<Record<string, unknown>>;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -872,10 +899,7 @@ export class ApiService {
   static async deleteAdvert(id: number): Promise<DeleteAdvertResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.advert.advertDelete(
-        { advert_id: id },
-        params,
-      );
+      const response = await generatedApiClient.advert.advertDelete({ advert_id: id }, params);
       return response.data;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -936,16 +960,15 @@ export class ApiService {
   > {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response =
-        await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
-          {
-            timeout,
-            filter_mask,
-            since,
-            prefix_only,
-          },
-          params,
-        );
+      const response = await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
+        {
+          timeout,
+          filter_mask,
+          since,
+          prefix_only,
+        },
+        params,
+      );
       return response.data as ApiResponse<{
         session_id: string;
         tag: number;
@@ -1305,9 +1328,7 @@ export class ApiService {
   // Backup & Restore
   // ========================
 
-  static async exportConfig(
-    includeSecrets = false,
-  ): Promise<
+  static async exportConfig(includeSecrets = false): Promise<
     ApiResponse<{
       meta: {
         exported_at: string;
@@ -1333,10 +1354,7 @@ export class ApiService {
   static async importConfig(config: Record<string, unknown>): Promise<ImportConfigResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.configImport.configImportCreate(
-        { config },
-        params,
-      );
+      const response = await generatedApiClient.configImport.configImportCreate({ config }, params);
       return response.data;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -1495,9 +1513,7 @@ export class ApiService {
     return this.post('/plugins/uninstall', { id, delete_data: deleteData });
   }
 
-  static async getPluginConfig(
-    id: string,
-  ): Promise<
+  static async getPluginConfig(id: string): Promise<
     ApiResponse<unknown> & {
       id?: string;
       path?: string;
@@ -1576,11 +1592,7 @@ export class ApiService {
     }
   }
 
-  static openPluginProgressStream(
-    id: string,
-    since = 0,
-    fresh = true,
-  ): EventSource {
+  static openPluginProgressStream(id: string, since = 0, fresh = true): EventSource {
     const params = new URLSearchParams({ id, since: String(since) });
     if (fresh) {
       params.set('fresh', '1');
