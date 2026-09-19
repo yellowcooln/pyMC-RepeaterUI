@@ -246,14 +246,22 @@ export const useWebSocketStore = defineStore('websocket', () => {
         } else if (message.type === 'stats') {
           if (message.data?.packet_stats) {
             packetStore.updateRealtimeStats({ packet_stats: message.data.packet_stats });
+            dataService.noteWsDelivery('packetStats');
           }
           if (message.data?.system_stats) {
             systemStore.updateRealtimeStats(message.data.system_stats);
+            if (message.data.system_stats.advert_tier) {
+              dataService.applyAdvertTierBroadcast(message.data.system_stats.advert_tier);
+            }
           }
         } else if (message.type === 'packet_stats') {
           packetStore.updateRealtimeStats(message.data);
+          dataService.noteWsDelivery('packetStats');
         } else if (message.type === 'system_stats') {
           systemStore.updateRealtimeStats(message.data);
+          if (message.data?.advert_tier) {
+            dataService.applyAdvertTierBroadcast(message.data.advert_tier);
+          }
         } else if (message.type === 'pong' || message.type === 'ping') {
           lastPongTime.value = Date.now();
 
@@ -334,6 +342,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     connectionState,
     reconnectAttempts,
     snackbar,
+    showSnackbar,
     connect,
     disconnect,
     pause,

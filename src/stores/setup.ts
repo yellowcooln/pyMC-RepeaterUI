@@ -1,5 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import {
+  canonicalModemTransport,
+  normalizeModemHardwareOptions,
+} from '@/utils/modemTransport';
 
 interface RadioPreset {
   title: string;
@@ -74,9 +78,9 @@ export const useSetupStore = defineStore('setup', () => {
         return selectedHardwareConnection.value !== null;
       case 4: {
         if (!selectedHardware.value) return false;
-        const k = selectedHardware.value.key.toLowerCase();
-        if (k === 'kiss' || k === 'pymc_usb') return usbPort.value.trim().length > 0;
-        if (k === 'pymc_tcp') return tcpHost.value.trim().length > 0;
+        const k = canonicalModemTransport(selectedHardware.value.key);
+        if (k === 'kiss' || k === 'modem_usb') return usbPort.value.trim().length > 0;
+        if (k === 'modem_tcp') return tcpHost.value.trim().length > 0;
         return true;
       }
       case 5:
@@ -110,7 +114,9 @@ export const useSetupStore = defineStore('setup', () => {
         throw new Error(data.error);
       }
 
-      hardwareOptions.value = data.hardware || [];
+      hardwareOptions.value = normalizeModemHardwareOptions<HardwareOption>(
+        (data.hardware || []) as HardwareOption[],
+      );
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load hardware options';
       console.error('Error fetching hardware options:', e);
@@ -207,28 +213,29 @@ export const useSetupStore = defineStore('setup', () => {
         },
         body: JSON.stringify({
           node_name: nodeName.value.trim(),
-          hardware_key: selectedHardware.value?.key,
+          hardware_key: canonicalModemTransport(selectedHardware.value?.key),
           radio_preset: radioConfig,
           admin_password: adminPassword.value,
           ...(selectedHardware.value && (() => {
-            const k = selectedHardware.value!.key.toLowerCase();
+            const k = canonicalModemTransport(selectedHardware.value!.key);
             if (k === 'kiss') {
               return {
                 kiss_port: usbPort.value.trim() || '/dev/ttyUSB0',
                 kiss_baud_rate: 115200,
               };
             }
-            if (k === 'pymc_usb') {
+            if (k === 'modem_usb') {
               return {
-                pymc_usb_port: usbPort.value.trim() || '/dev/ttyACM0',
-                pymc_usb_baudrate: 921600,
+                modem_usb_port: usbPort.value.trim() || '/dev/ttyACM0',
+                modem_usb_baudrate: 921600,
               };
             }
-            if (k === 'pymc_tcp') {
+            if (k === 'modem_tcp') {
+              const token = tcpToken.value.trim();
               return {
-                pymc_tcp_host: tcpHost.value.trim(),
-                pymc_tcp_port: tcpPort.value,
-                pymc_tcp_token: tcpToken.value.trim(),
+                modem_tcp_host: tcpHost.value.trim(),
+                modem_tcp_port: tcpPort.value,
+                ...(token ? { modem_tcp_token: token } : {}),
               };
             }
             return {};

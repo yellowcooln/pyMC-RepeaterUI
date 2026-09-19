@@ -1,21 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import Sidebar from '@/components/nav/Sidebar.vue';
 import TopBar from '@/components/nav/TopBar.vue';
-import { useDataService } from '@/stores/dataService';
 
 defineOptions({ name: 'DashboardLayout' });
 
 const showMobileSidebar = ref(false);
-const dataService = useDataService();
-
-// Block the route view while bootstrap is running to avoid mounting all chart
-// components simultaneously with the HTTP burst on low-memory devices.
-// "all pending" means bootstrap hasn't started yet — also block in that case.
-const showContent = computed(() => {
-  const allPending = Object.values(dataService.loadProgress).every((s) => s === 'pending');
-  return !allPending && !dataService.isBootstrapping;
-});
 
 const toggleMobileSidebar = () => {
   showMobileSidebar.value = !showMobileSidebar.value;
@@ -62,9 +52,7 @@ const closeMobileSidebar = () => {
         <!-- Top Bar -->
         <TopBar @toggle-mobile-sidebar="toggleMobileSidebar" />
 
-        <!-- Router View for Page Content — withheld during bootstrap to avoid
-             mounting chart components alongside the HTTP burst on mobile -->
-        <router-view v-if="showContent" />
+        <router-view />
       </main>
     </div>
   </div>

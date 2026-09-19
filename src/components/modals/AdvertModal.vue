@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import RadioTower from '@/components/icons/radiotower.vue';
 
 defineOptions({ name: 'AdvertModal' });
@@ -8,16 +8,20 @@ interface Props {
   isOpen: boolean;
   isLoading: boolean;
   isSuccess: boolean;
+  mode?: 'flood' | 'direct';
   error?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  mode: 'flood',
   error: null,
 });
 
+const currentMode = computed(() => props.mode || 'flood');
+
 const emit = defineEmits<{
   close: [];
-  send: [];
+  send: [mode: 'flood' | 'direct'];
 }>();
 
 // Local state for animations
@@ -62,11 +66,11 @@ const handleClose = () => {
   }
 };
 
-const handleSend = () => {
+const handleSend = (mode: 'flood' | 'direct') => {
   if (!props.isLoading) {
     // Trigger the ping pulse animation
     showPingPulse.value = true;
-    emit('send');
+    emit('send', mode);
   }
 };
 
@@ -243,10 +247,10 @@ const isNetworkTimeoutError = (error: string | null) => {
           <!-- Status Text -->
           <div class="mb-6">
             <p v-if="isLoading" class="text-content-primary text-lg">
-              Broadcasting advertisement...
+              Broadcasting {{ currentMode }} advertisement...
             </p>
             <p v-else-if="isSuccess" class="text-accent-green text-lg font-medium">
-              Advertisement sent successfully!
+              {{ currentMode.charAt(0).toUpperCase() + currentMode.slice(1) }} advertisement sent successfully!
             </p>
             <p v-else-if="error && isNetworkTimeoutError(error)" class="text-secondary text-lg">
               Advertisement likely sent
@@ -269,24 +273,32 @@ const isNetworkTimeoutError = (error: string | null) => {
           </div>
 
           <!-- Action Buttons -->
-          <div v-if="!isLoading && !isSuccess" class="flex gap-3">
+          <div v-if="!isLoading && !isSuccess" class="flex flex-col md:flex-row gap-3">
             <button
               @click="handleClose"
-              class="flex-1 bg-background-mute dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-light hover:border-primary dark:hover:border-primary rounded-[10px] px-6 py-3 text-content-primary hover:bg-stroke-subtle dark:hover:bg-white/opacity-light transition-all duration-200"
+              class="w-full md:flex-1 bg-background-mute dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-light hover:border-primary dark:hover:border-primary rounded-[10px] px-6 py-3 text-content-primary hover:bg-stroke-subtle dark:hover:bg-white/opacity-light transition-all duration-200"
             >
               Cancel
             </button>
-            <button
-              @click="handleSend"
-              class="flex-1 rounded-[10px] px-6 py-3 font-medium transition-all duration-200 shadow-lg"
-              :class="[
-                error && isNetworkTimeoutError(error)
-                  ? 'bg-secondary hover:bg-secondary/opacity-heavy text-background hover:shadow-secondary/opacity-medium'
-                  : 'bg-primary hover:bg-primary/opacity-heavy text-background hover:shadow-primary/opacity-medium',
-              ]"
-            >
-              {{ error && isNetworkTimeoutError(error) ? 'Try Again' : 'Send Advertisement' }}
-            </button>
+            <div class="w-full md:flex-1 flex flex-col gap-2">
+              <button
+                @click="handleSend('flood')"
+                class="w-full rounded-[10px] px-4 py-3 font-medium transition-all duration-200 shadow-lg bg-primary hover:bg-primary/opacity-heavy text-background hover:shadow-primary/opacity-medium"
+              >
+                Send Flood
+              </button>
+              <button
+                @click="handleSend('direct')"
+                class="w-full rounded-[10px] px-6 py-3 font-medium transition-all duration-200 shadow-lg"
+                :class="[
+                  error && isNetworkTimeoutError(error)
+                    ? 'bg-secondary hover:bg-secondary/opacity-heavy text-background hover:shadow-secondary/opacity-medium'
+                    : 'bg-secondary hover:bg-secondary/opacity-heavy text-background hover:shadow-secondary/opacity-medium',
+                ]"
+              >
+                {{ error && isNetworkTimeoutError(error) ? 'Try Again (Direct)' : 'Send Direct' }}
+              </button>
+            </div>
           </div>
 
           <!-- Auto-close timer for success state -->

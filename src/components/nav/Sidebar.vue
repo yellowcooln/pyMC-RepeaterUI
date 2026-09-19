@@ -6,15 +6,19 @@ import { useSystemStore } from '@/stores/system';
 import { usePacketStore } from '@/stores/packets';
 import { useDataService } from '@/stores/dataService';
 import { clearToken } from '@/utils/auth';
+import GitHubIcon from '../icons/github.vue';
+import DiscordIcon from '../icons/discord.vue';
+import CoffeeIcon from '../icons/coffee.vue';
 import AdvertModal from '../modals/AdvertModal.vue';
-import CommunityLinks from '../ui/CommunityLinks.vue';
 import NavItem from './NavItem.vue';
 import NoiseFloorSparkline from './NoiseFloorSparkline.vue';
 import { navigationItems, knownCapabilities } from '@/config/navigation';
 import type { NavItemConfig } from '@/config/navigation';
 import { useTheme } from '@/composables/useTheme';
 import { useSidebarPin } from '@/composables/useSidebarPin';
-import { Pin, X } from '@lucide/vue';
+import MeshCoreQrModal from '../modals/MeshCoreQrModal.vue';
+import { buildMeshCoreAddContactUrl, isValidMeshCorePublicKey } from '@/utils/meshcoreQr';
+import { Pin, QrCode, X } from '@lucide/vue';
 import openHopLogo from '@/assets/logo/openhop_transparent_trim.png';
 
 defineOptions({ name: 'SidebarNav' });
@@ -72,16 +76,18 @@ const changingMode = ref(false);
 const showAdvertModal = ref(false);
 const advertSuccess = ref(false);
 const advertError = ref<string | null>(null);
+const advertMode = ref<'flood' | 'direct'>('flood');
 
 provide(NAV_ACTION_HANDLERS_KEY, {
   sendAdvert: () => { showAdvertModal.value = true },
 });
 
-const handleAdvertModalSend = async () => {
+const handleAdvertModalSend = async (mode: 'flood' | 'direct') => {
   sendingAdvert.value = true;
   advertError.value = null;
+  advertMode.value = mode;
   try {
-    await systemStore.sendAdvert();
+    await systemStore.sendAdvert(mode);
     advertSuccess.value = true;
     setTimeout(() => closeAdvertModal(), 2000);
   } catch (error) {
@@ -172,7 +178,21 @@ function filterNavItemsBySearch(items: NavItemConfig[], query: string): NavItemC
   }, []);
 }
 
-const capabilityFilteredNavItems = computed(() => filterNavItems(navigationItems));
+function flattenChildrenForDisplay(items: NavItemConfig[]): NavItemConfig[] {
+  return items.flatMap((item) => {
+    if (!item.children?.length) return [item];
+    return flattenChildrenForDisplay(item.children);
+  });
+}
+
+function flattenNavItemsForDisplay(items: NavItemConfig[]): NavItemConfig[] {
+  return items.map((item) => {
+    if (!item.children?.length) return item;
+    return { ...item, children: flattenChildrenForDisplay(item.children) };
+  });
+}
+
+const capabilityFilteredNavItems = computed(() => flattenNavItemsForDisplay(filterNavItems(navigationItems)));
 const visibleNavItems = computed(() => filterNavItemsBySearch(capabilityFilteredNavItems.value, navSearch.value));
 
 // ── Status card ───────────────────────────────────────────────────────────────
@@ -231,6 +251,29 @@ const currentTime = computed(() => {
   if (times.length === 0) return 'Never';
   return times.reduce((a, b) => (a > b ? a : b)).toLocaleTimeString();
 });
+
+const showRepeaterQrModal = ref(false);
+const repeaterQrValue = ref('');
+const repeaterPublicKey = computed(() => systemStore.stats?.public_key ?? '');
+const repeaterQrAvailable = computed(() => isValidMeshCorePublicKey(repeaterPublicKey.value));
+
+function openRepeaterQr() {
+  if (!repeaterQrAvailable.value) {
+    return;
+  }
+
+  const contactName = (systemStore.nodeName || 'Repeater').trim() || 'Repeater';
+  repeaterQrValue.value = buildMeshCoreAddContactUrl({
+    name: contactName,
+    publicKey: repeaterPublicKey.value,
+    type: 2,
+  });
+  showRepeaterQrModal.value = true;
+}
+
+function closeRepeaterQr() {
+  showRepeaterQrModal.value = false;
+}
 </script>
 
 <template>
@@ -285,9 +328,20 @@ const currentTime = computed(() => {
               :title="systemStore.statusBadge.title"
             />
           </p>
-          <p class="text-content-secondary dark:text-content-muted text-sm mt-1">
-            &lt;{{ systemStore.pubKey }}&gt;
-          </p>
+          <div class="mt-1 flex items-center gap-2">
+            <p class="text-content-secondary dark:text-content-muted text-sm">
+              &lt;{{ systemStore.pubKey }}&gt;
+            </p>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center rounded-[8px] border border-stroke-subtle dark:border-stroke/opacity-medium p-1 text-content-secondary hover:text-content-primary hover:border-primary/opacity-heavy transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="!repeaterQrAvailable"
+              title="Show repeater contact QR"
+              @click="openRepeaterQr"
+            >
+              <QrCode class="h-3.5 w-3.5" />
+            </button>
+          </div>
 
           <!-- Status card -->
           <div class="mt-3 rounded-[10px] border border-stroke-subtle dark:border-white/opacity-light bg-white dark:bg-white/opacity-subtle overflow-hidden">
@@ -481,7 +535,22 @@ const currentTime = computed(() => {
         </a>
       </div>
 
-      <CommunityLinks />
+      <div class="flex items-center justify-center gap-3">
+        <a href="https://discord.gg/3s8MMaSTzq" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-indigo-50 dark:hover:bg-indigo-500/20 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="Discord">
+          <DiscordIcon class="w-5 h-5 text-white group-hover:text-indigo-500 transition-colors" />
+        </a>
+        <a href="https://openhop.dev" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="openHop Website">
+          <svg class="w-5 h-5 text-white group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 21a9.004 9.004 0 008.716-6M12 21a9.004 9.004 0 01-8.716-6M12 21c1.656 0 3-4.03 3-9s-1.344-9-3-9m0 18c-1.656 0-3-4.03-3-9s1.344-9 3-9m0 0a9.004 9.004 0 018.716 6M12 3a9.004 9.004 0 00-8.716 6M3.284 9h17.432M3.284 15h17.432" />
+          </svg>
+        </a>
+        <a href="https://github.com/openhop-dev/openhop_repeater" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-primary/opacity-medium dark:hover:bg-primary/opacity-medium hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="GitHub">
+          <GitHubIcon class="w-5 h-5 text-white group-hover:text-primary transition-colors" />
+        </a>
+        <a href="https://buymeacoffee.com/rightup" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-content-primary dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-medium hover:bg-secondary/opacity-light hover:border-secondary/opacity-heavy dark:hover:border-secondary/opacity-heavy transition-all duration-300 hover:scale-110 group backdrop-blur-sm" title="Buy Me a Coffee">
+          <CoffeeIcon class="w-5 h-5 text-white group-hover:text-secondary transition-colors" />
+        </a>
+      </div>
     </div>
   </aside>
 
@@ -490,8 +559,17 @@ const currentTime = computed(() => {
     :isLoading="sendingAdvert"
     :isSuccess="advertSuccess"
     :error="advertError"
+    :mode="advertMode"
     @close="closeAdvertModal"
     @send="handleAdvertModalSend"
+  />
+
+  <MeshCoreQrModal
+    :is-open="showRepeaterQrModal"
+    title="Repeater QR"
+    subtitle="Scan in MeshCore app to add this repeater contact (type=2)."
+    :value="repeaterQrValue"
+    @close="closeRepeaterQr"
   />
 </template>
 

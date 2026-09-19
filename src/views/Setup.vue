@@ -7,6 +7,7 @@ import ThemeToggle from '@/components/ThemeToggle.vue';
 import Spinner from '@/components/ui/Spinner.vue';
 import RestartModal from '@/components/modals/RestartModal.vue';
 import TxPowerNoticeModal from '@/components/modals/TxPowerNoticeModal.vue';
+import { canonicalModemTransport } from '@/utils/modemTransport';
 
 const setupStore = useSetupStore();
 
@@ -40,6 +41,8 @@ const RESTORE_SECTION_HINTS = new Set([
   'sx1262',
   'ch341',
   'kiss',
+  'modem_usb',
+  'modem_tcp',
   'pymc_usb',
   'pymc_tcp',
   'mqtt_brokers',
@@ -63,12 +66,13 @@ const selectedTxPowerForWarning = computed(() => {
 });
 
 function selectedHardwareKey(): string {
-  return setupStore.selectedHardware?.key?.toLowerCase() ?? '';
+  const key = canonicalModemTransport(setupStore.selectedHardware?.key ?? '');
+  return typeof key === 'string' ? key : '';
 }
 
 function isUsbHardwareSelected(): boolean {
   const key = selectedHardwareKey();
-  return key === 'kiss' || key === 'pymc_usb';
+  return key === 'kiss' || key === 'modem_usb';
 }
 
 async function loadSerialDevices() {
@@ -159,12 +163,12 @@ const connectionFilters: Array<{ key: ConnectionType; title: string; description
   {
     key: 'usb',
     title: 'USB Connection',
-    description: 'USB-attached modems including CH341 and openHop USB modem.',
+    description: 'USB-attached modems including CH341 and openHop Modem USB-CDC.',
   },
   {
     key: 'network',
     title: 'Network Wi-Fi Based',
-    description: 'Remote modem reached over LAN/Wi-Fi using openHop TCP.',
+    description: 'Remote openHop Modem reached over LAN, Wi-Fi, or Ethernet.',
   },
 ];
 
@@ -181,8 +185,8 @@ function getHardwareConnectionType(
     return configured;
   }
 
-  if (key.includes('ch341') || key === 'pymc_usb') return 'usb';
-  if (key === 'pymc_tcp') return 'network';
+  if (key.includes('ch341') || key === 'modem_usb') return 'usb';
+  if (key === 'modem_tcp') return 'network';
   return 'gpio';
 }
 
@@ -781,9 +785,9 @@ const stepTitles = [
                 <div
                   v-if="
                     setupStore.selectedHardware &&
-                    (setupStore.selectedHardware.key.toLowerCase() === 'kiss' ||
-                      setupStore.selectedHardware.key.toLowerCase() === 'pymc_usb' ||
-                      setupStore.selectedHardware.key.toLowerCase() === 'pymc_tcp')
+                    (selectedHardwareKey() === 'kiss' ||
+                      selectedHardwareKey() === 'modem_usb' ||
+                      selectedHardwareKey() === 'modem_tcp')
                   "
                 >
                   <!-- Step divider -->
@@ -799,8 +803,8 @@ const stepTitles = [
                   <!-- USB fields -->
                   <div
                     v-if="
-                      setupStore.selectedHardware.key.toLowerCase() === 'kiss' ||
-                      setupStore.selectedHardware.key.toLowerCase() === 'pymc_usb'
+                      selectedHardwareKey() === 'kiss' ||
+                      selectedHardwareKey() === 'modem_usb'
                     "
                     class="pl-10"
                   >
@@ -869,7 +873,7 @@ const stepTitles = [
 
                   <!-- TCP fields -->
                   <div
-                    v-else-if="setupStore.selectedHardware.key.toLowerCase() === 'pymc_tcp'"
+                    v-else-if="selectedHardwareKey() === 'modem_tcp'"
                     class="pl-10"
                   >
                     <div class="bg-background-mute dark:bg-white/opacity-subtle border border-stroke-subtle dark:border-stroke/opacity-light rounded-[12px] p-5 space-y-4">
@@ -881,10 +885,10 @@ const stepTitles = [
                           v-model="setupStore.tcpHost"
                           type="text"
                           class="modal-input px-4 py-3 font-mono"
-                          placeholder="pymc-3e2834.local"
+                          placeholder="openhop-modem.local"
                         />
                         <p class="text-content-muted text-xs mt-2">
-                          mDNS hostname, LAN IP, or domain name of the openHop Wi-Fi modem.
+                          mDNS hostname, LAN IP, or domain name of the openHop Modem.
                         </p>
                       </div>
                       <div class="grid grid-cols-2 gap-4">

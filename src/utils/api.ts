@@ -1,20 +1,12 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { summarizeApiError } from './safeError';
-export { summarizeApiError };
-export type { SafeApiErrorSummary } from './safeError';
-import type {
-  AuthMethodsResponse,
-  OIDCExchangeResponse as GeneratedOIDCExchangeResponse,
-  RequestParams,
-} from '@/generated/openapi';
+import type { RequestParams } from '@/generated/openapi';
 import {
   getToken,
   isTokenExpired,
   shouldRefreshToken,
   setToken,
   getClientId,
-  isOidcAuthenticated,
 } from './auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import type {
@@ -29,14 +21,13 @@ import type {
 } from '@/types/api';
 import { generatedApiClient } from '@/services/api/generatedClient';
 
-type GeneratedEndpointData<T extends (...args: never[]) => Promise<{ data: unknown }>> = Awaited<
-  ReturnType<T>
->['data'];
+type GeneratedEndpointData<T extends (...args: any[]) => Promise<{ data: any }>> =
+  Awaited<ReturnType<T>>['data'];
 
-type EndpointDataPayload<T extends (...args: never[]) => Promise<{ data: unknown }>> =
+type EndpointDataPayload<T extends (...args: any[]) => Promise<{ data: any }>> =
   GeneratedEndpointData<T> extends { data?: infer D } ? D : never;
 
-type EndpointApiResponse<T extends (...args: never[]) => Promise<{ data: unknown }>> = ApiResponse<
+type EndpointApiResponse<T extends (...args: any[]) => Promise<{ data: any }>> = ApiResponse<
   EndpointDataPayload<T>
 >;
 
@@ -47,9 +38,7 @@ type AclClientsResponse = EndpointApiResponse<
 type AclRemoveClientResponse = EndpointApiResponse<
   (typeof generatedApiClient)['aclRemoveClient']['aclRemoveClientCreate']
 >;
-type AclStatsResponse = EndpointApiResponse<
-  (typeof generatedApiClient)['aclStats']['aclStatsList']
->;
+type AclStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['aclStats']['aclStatsList']>;
 type RoomMessagesResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessages']['roomMessagesList']
 >;
@@ -59,9 +48,7 @@ type RoomPostMessageResponse = EndpointApiResponse<
 type RoomMessagesClearResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomMessagesClear']['roomMessagesClearDelete']
 >;
-type RoomStatsResponse = EndpointApiResponse<
-  (typeof generatedApiClient)['roomStats']['roomStatsList']
->;
+type RoomStatsResponse = EndpointApiResponse<(typeof generatedApiClient)['roomStats']['roomStatsList']>;
 type RoomClientsResponse = EndpointApiResponse<
   (typeof generatedApiClient)['roomClients']['roomClientsList']
 >;
@@ -105,15 +92,9 @@ type UpdateDefaultRegionResponse = EndpointApiResponse<
 >;
 type PolicyDocumentResponse = ApiResponse<PolicyDocumentData>;
 type PolicyValidationResponse = ApiResponse<PolicyValidationResult>;
-type DeleteAdvertResponse = EndpointApiResponse<
-  (typeof generatedApiClient)['advert']['advertDelete']
->;
-type IdentitiesResponse = EndpointApiResponse<
-  (typeof generatedApiClient)['identities']['identitiesList']
->;
-type IdentityResponse = EndpointApiResponse<
-  (typeof generatedApiClient)['identity']['identityList']
->;
+type DeleteAdvertResponse = EndpointApiResponse<(typeof generatedApiClient)['advert']['advertDelete']>;
+type IdentitiesResponse = EndpointApiResponse<(typeof generatedApiClient)['identities']['identitiesList']>;
+type IdentityResponse = EndpointApiResponse<(typeof generatedApiClient)['identity']['identityList']>;
 type CreateIdentityResponse = EndpointApiResponse<
   (typeof generatedApiClient)['createIdentity']['createIdentityCreate']
 >;
@@ -161,23 +142,61 @@ export interface ApiResponse<T = unknown> {
   filters?: Record<string, unknown>;
 }
 
-export interface AuthMethods extends AuthMethodsResponse {
-  error?: string;
+/** Plugin manager status payload (see /api/plugins). */
+export interface PluginStatus {
+  id: string;
+  name?: string;
+  version?: string;
+  enabled?: boolean;
+  state?: string;
+  pid?: number | null;
+  last_exit_code?: number | null;
+  has_runtime?: boolean;
+  has_ui?: boolean;
+  ui_entry?: string | null;
+  data_dir?: string;
+  description?: string;
+  source?: string | null;
+  repository?: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
+  updated?: boolean;
 }
 
-export interface OidcExchangeResponse extends Partial<GeneratedOIDCExchangeResponse> {
-  success: boolean;
-  error?: string;
+/** Curated catalogue entry from /api/plugins/catalogue. */
+export interface CataloguePlugin {
+  id: string;
+  name: string;
+  description?: string;
+  repository: string;
+  category?: string;
+  /** Optional project homepage URL */
+  homepage?: string;
+  /** HTTPS URL to plugin logo/icon */
+  logo?: string;
+  installed?: boolean;
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
+  releasesError?: string;
+}
+
+export interface PluginUpdateInfo {
+  id: string;
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
+  repository?: string | null;
+  releaseNotes?: string | null;
+  releaseUrl?: string | null;
+  releaseTag?: string | null;
+  reason?: string;
 }
 
 // Configure the base API URL
 // Use relative paths in both dev and production since Vite proxy handles dev forwarding
 const API_BASE_URL = '/api';
 const API_SERVER_URL: string = '';
-
-function logApiError(context: string, error: unknown): void {
-  console.error(context, summarizeApiError(error));
-}
 
 export { API_BASE_URL, API_SERVER_URL };
 
@@ -196,8 +215,8 @@ async function refreshToken(): Promise<string> {
 
   isRefreshing = true;
   refreshPromise = (async () => {
-    const token = getToken();
     try {
+      const token = getToken();
       if (!token) {
         throw new Error('No token to refresh');
       }
@@ -222,11 +241,9 @@ async function refreshToken(): Promise<string> {
         throw new Error('Token refresh failed');
       }
     } catch (error) {
-      logApiError('Token refresh error:', error);
+      console.error('Token refresh error:', error);
       const appRuntime = useAppRuntimeStore();
-      await appRuntime.handleAuthFailure(
-        isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
-      );
+      await appRuntime.handleAuthFailure('expired');
       throw error;
     } finally {
       isRefreshing = false;
@@ -262,12 +279,7 @@ export { authClient };
 authClient.interceptors.request.use(
   async (config) => {
     // Skip auth for login and refresh endpoints
-    if (
-      config.url?.includes('/auth/login') ||
-      config.url?.includes('/auth/refresh') ||
-      config.url?.includes('/auth/methods') ||
-      config.url?.includes('/auth/oidc/exchange')
-    ) {
+    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/refresh')) {
       return config;
     }
 
@@ -289,9 +301,7 @@ authClient.interceptors.request.use(
       // Check if token is expired
       if (isTokenExpired()) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(
-          isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
-        );
+        void appRuntime.handleAuthFailure('expired');
         return Promise.reject(new Error('Token expired'));
       }
 
@@ -301,7 +311,7 @@ authClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    logApiError('Auth API Request Error:', error);
+    console.error('Auth API Request Error:', error);
     return Promise.reject(error);
   },
 );
@@ -313,19 +323,15 @@ authClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (
-        error.config?.headers?.['Authorization'] as string | undefined
-      )?.replace('Bearer ', '');
+      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(
-          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
-        );
+        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
       }
     }
 
-    logApiError('Auth API Response Error:', error);
+    console.error('Auth API Response Error:', error.response?.data || error.message);
     return Promise.reject(error);
   },
 );
@@ -356,9 +362,7 @@ apiClient.interceptors.request.use(
       // Check if token is expired
       if (isTokenExpired()) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(
-          isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
-        );
+        void appRuntime.handleAuthFailure('expired');
         return Promise.reject(new Error('Token expired'));
       }
 
@@ -368,7 +372,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
-    logApiError('API Request Error:', error);
+    console.error('API Request Error:', error);
     return Promise.reject(error);
   },
 );
@@ -380,43 +384,21 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const requestToken = (
-        error.config?.headers?.['Authorization'] as string | undefined
-      )?.replace('Bearer ', '');
+      const requestToken = (error.config?.headers?.['Authorization'] as string | undefined)?.replace('Bearer ', '');
       const currentToken = getToken();
       if (!requestToken || requestToken === currentToken) {
         const appRuntime = useAppRuntimeStore();
-        void appRuntime.handleAuthFailure(
-          error.response?.status === 403 ? 'forbidden' : 'unauthorized',
-        );
+        void appRuntime.handleAuthFailure(error.response?.status === 403 ? 'forbidden' : 'unauthorized');
       }
     }
 
-    logApiError('API Response Error:', error);
+    console.error('API Response Error:', error.response?.data || error.message);
     return Promise.reject(error);
   },
 );
 
 // Generic API utility class
 export class ApiService {
-  static async createStreamTicket(path: string): Promise<string> {
-    const response = await authClient.post('/auth/stream_ticket', { path });
-    const payload = response.data as { success?: boolean; ticket?: unknown };
-    if (payload.success !== true || typeof payload.ticket !== 'string' || !payload.ticket) {
-      throw new Error('Stream ticket response was invalid');
-    }
-    return payload.ticket;
-  }
-
-  static async createStreamUrl(
-    path: string,
-    params: URLSearchParams = new URLSearchParams(),
-  ): Promise<string> {
-    params.set('ticket', await this.createStreamTicket(path));
-    const query = params.toString();
-    return `${API_SERVER_URL}${path}${query ? `?${query}` : ''}`;
-  }
-
   private static async resolveRequestToken(): Promise<string | undefined> {
     const token = getToken();
 
@@ -430,9 +412,7 @@ export class ApiService {
 
     if (isTokenExpired()) {
       const appRuntime = useAppRuntimeStore();
-      void appRuntime.handleAuthFailure(
-        isOidcAuthenticated(token) ? 'reauthentication' : 'expired',
-      );
+      void appRuntime.handleAuthFailure('expired');
       throw new Error('Token expired');
     }
 
@@ -573,10 +553,7 @@ export class ApiService {
   }): Promise<NeighborLinksResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinks.neighborLinksList(
-        params,
-        requestParams,
-      );
+      const response = await generatedApiClient.neighborLinks.neighborLinksList(params, requestParams);
       return response.data as NeighborLinksApiResponse as NeighborLinksResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -594,13 +571,10 @@ export class ApiService {
   ): Promise<NeighborLinkHistoryResponse> {
     try {
       const requestParams = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(
-        params,
-        {
-          ...requestParams,
-          signal: config?.signal as AbortSignal | undefined,
-        },
-      );
+      const response = await generatedApiClient.neighborLinkHistory.neighborLinkHistoryList(params, {
+        ...requestParams,
+        signal: config?.signal as AbortSignal | undefined,
+      });
       return response.data as NeighborLinkHistoryApiResponse as NeighborLinkHistoryResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -767,19 +741,14 @@ export class ApiService {
   }): Promise<PolicyValidationResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyValidate.policyValidateCreate(
-        payload,
-        params,
-      );
+      const response = await generatedApiClient.policyValidate.policyValidateCreate(payload, params);
       return response.data as PolicyValidationResponse;
     } catch (error: unknown) {
       throw this.handleError(error);
     }
   }
 
-  static async getPolicyGroups(
-    kind?: PolicyGroupKind,
-  ): Promise<ApiResponse<Record<string, unknown>>> {
+  static async getPolicyGroups(kind?: PolicyGroupKind): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
       const response = await generatedApiClient.policyGroups.policyGroupsList(
@@ -830,10 +799,7 @@ export class ApiService {
   }): Promise<ApiResponse<Record<string, unknown>>> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(
-        data,
-        params,
-      );
+      const response = await generatedApiClient.policyGroupEntries.policyGroupEntriesList(data, params);
       return response.data as ApiResponse<Record<string, unknown>>;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -906,7 +872,10 @@ export class ApiService {
   static async deleteAdvert(id: number): Promise<DeleteAdvertResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.advert.advertDelete({ advert_id: id }, params);
+      const response = await generatedApiClient.advert.advertDelete(
+        { advert_id: id },
+        params,
+      );
       return response.data;
     } catch (error: unknown) {
       throw this.handleError(error);
@@ -967,15 +936,16 @@ export class ApiService {
   > {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
-        {
-          timeout,
-          filter_mask,
-          since,
-          prefix_only,
-        },
-        params,
-      );
+      const response =
+        await generatedApiClient.discoverNeighborsStart.discoverNeighborsStartCreate(
+          {
+            timeout,
+            filter_mask,
+            since,
+            prefix_only,
+          },
+          params,
+        );
       return response.data as ApiResponse<{
         session_id: string;
         tag: number;
@@ -995,15 +965,16 @@ export class ApiService {
     }
   }
 
-  static async getNeighborDiscoveryStreamUrl(
-    sessionId: string,
-    lastEventId?: number,
-  ): Promise<string> {
+  static getNeighborDiscoveryStreamUrl(sessionId: string, lastEventId?: number): string {
     const params = new URLSearchParams({ session_id: sessionId });
+    const token = getToken();
+    if (token) {
+      params.set('token', token);
+    }
     if (lastEventId !== undefined) {
       params.set('last_event_id', String(lastEventId));
     }
-    return this.createStreamUrl('/api/discover_neighbors_stream', params);
+    return `${API_BASE_URL}/discover_neighbors_stream?${params.toString()}`;
   }
 
   static async addDiscoveredNeighbor(payload: {
@@ -1099,6 +1070,8 @@ export class ApiService {
                 node_name?: string;
                 latitude?: number;
                 longitude?: number;
+                flood_advert_interval_hours?: number;
+                direct_advert_interval_hours?: number;
               }
             | undefined,
         },
@@ -1332,7 +1305,9 @@ export class ApiService {
   // Backup & Restore
   // ========================
 
-  static async exportConfig(includeSecrets = false): Promise<
+  static async exportConfig(
+    includeSecrets = false,
+  ): Promise<
     ApiResponse<{
       meta: {
         exported_at: string;
@@ -1358,22 +1333,9 @@ export class ApiService {
   static async importConfig(config: Record<string, unknown>): Promise<ImportConfigResponse> {
     try {
       const params = await this.getGeneratedRequestParams();
-      const response = await generatedApiClient.configImport.configImportCreate({ config }, params);
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleError(error);
-    }
-  }
-
-  static async importBootstrapConfig(
-    config: Record<string, unknown>,
-    bootstrapToken: string,
-  ): Promise<ImportConfigResponse> {
-    try {
-      const response = await authClient.post(
-        '/config_import',
+      const response = await generatedApiClient.configImport.configImportCreate(
         { config },
-        { headers: { 'X-Bootstrap-Token': bootstrapToken.trim() } },
+        params,
       );
       return response.data;
     } catch (error: unknown) {
@@ -1466,27 +1428,250 @@ export class ApiService {
     }
   }
 
+  // ========================
+  // Plugin Manager
+  // ========================
+
+  static async listPlugins(): Promise<ApiResponse<unknown> & { plugins?: PluginStatus[] }> {
+    return this.get('/plugins/');
+  }
+
+  static async getPlugin(id: string): Promise<ApiResponse<unknown> & PluginStatus> {
+    return this.get(`/plugins/${encodeURIComponent(id)}`) as Promise<
+      ApiResponse<unknown> & PluginStatus
+    >;
+  }
+
+  static async installPluginWheel(
+    file: File,
+  ): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    const form = new FormData();
+    form.append('wheel', file);
+    try {
+      const response = await apiClient.post('/plugins/install', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async enablePlugin(id: string): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    return this.post('/plugins/enable', { id });
+  }
+
+  static async disablePlugin(
+    id: string,
+  ): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    return this.post('/plugins/disable', { id });
+  }
+
+  static async startPlugin(id: string): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    return this.post('/plugins/start', { id });
+  }
+
+  static async stopPlugin(id: string): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    return this.post('/plugins/stop', { id });
+  }
+
+  static async restartPlugin(
+    id: string,
+  ): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    return this.post('/plugins/restart', { id });
+  }
+
+  static async getPluginLogs(
+    id: string,
+    tail = 200,
+  ): Promise<ApiResponse<unknown> & { id?: string; lines?: string[]; tail?: number }> {
+    return this.get('/plugins/logs', { id, tail });
+  }
+
+  static async uninstallPlugin(
+    id: string,
+    deleteData = false,
+  ): Promise<ApiResponse<unknown> & { uninstalled?: boolean; data_deleted?: boolean }> {
+    return this.post('/plugins/uninstall', { id, delete_data: deleteData });
+  }
+
+  static async getPluginConfig(
+    id: string,
+  ): Promise<
+    ApiResponse<unknown> & {
+      id?: string;
+      path?: string;
+      exists?: boolean;
+      defaults?: Record<string, unknown>;
+      saved?: Record<string, unknown>;
+      config?: Record<string, unknown>;
+    }
+  > {
+    // Path is /plugins/settings — CherryPy reserves controller attribute "config".
+    return this.get('/plugins/settings', { id });
+  }
+
+  static async setPluginConfig(
+    id: string,
+    config: Record<string, unknown>,
+    restart = false,
+  ): Promise<
+    ApiResponse<unknown> & {
+      id?: string;
+      path?: string;
+      exists?: boolean;
+      config?: Record<string, unknown>;
+      restarted?: boolean;
+    }
+  > {
+    return this.post('/plugins/settings', { id, config, restart });
+  }
+
+  static async listPluginCatalogue(
+    refresh = false,
+  ): Promise<ApiResponse<unknown> & { schema?: number; plugins?: CataloguePlugin[] }> {
+    return this.get('/plugins/catalogue', refresh ? { refresh: 1 } : undefined);
+  }
+
+  static async installCataloguePlugin(
+    id: string,
+    version?: string,
+  ): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    const body: Record<string, unknown> = { id };
+    if (version) body.version = version;
+    // Catalogue install downloads a wheel — allow a longer timeout
+    try {
+      const response = await apiClient.post('/plugins/catalogue_install', body, {
+        timeout: 180000,
+      });
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleError(error);
+    }
+  }
+
+  static async checkPluginUpdate(
+    id: string,
+    refresh = false,
+  ): Promise<ApiResponse<unknown> & PluginUpdateInfo> {
+    return this.get('/plugins/updates', {
+      id,
+      ...(refresh ? { refresh: 1 } : {}),
+    }) as Promise<ApiResponse<unknown> & PluginUpdateInfo>;
+  }
+
+  static async updatePlugin(
+    id: string,
+    version?: string,
+  ): Promise<ApiResponse<unknown> & { plugin?: PluginStatus }> {
+    const body: Record<string, unknown> = { id };
+    if (version) body.version = version;
+    try {
+      const response = await apiClient.post('/plugins/update', body, {
+        timeout: 180000,
+      });
+      return response.data;
+    } catch (error: unknown) {
+      throw this.handleError(error);
+    }
+  }
+
+  static openPluginProgressStream(
+    id: string,
+    since = 0,
+    fresh = true,
+  ): EventSource {
+    const params = new URLSearchParams({ id, since: String(since) });
+    if (fresh) {
+      params.set('fresh', '1');
+    }
+    const token = getToken();
+    if (token) {
+      params.set('token', token);
+    }
+    return new EventSource(`${API_BASE_URL}/plugins/progress?${params.toString()}`);
+  }
+
+  // ========================
+  // Sensor Manager
+  // ========================
+
+  static async getSensorTypes(): Promise<
+    ApiResponse<{
+      types: Array<{
+        type: string;
+        name: string;
+        description: string;
+        settings: Array<{
+          key: string;
+          type: string;
+          label: string;
+          default?: unknown;
+          help?: string;
+        }>;
+      }>;
+    }>
+  > {
+    return this.get('/sensors_types');
+  }
+
+  static async getSensorConfig(): Promise<
+    ApiResponse<{
+      enabled: boolean;
+      poll_interval_seconds: number;
+      auto_install_packages: boolean;
+      definitions: Array<{
+        name: string;
+        type: string;
+        enabled: boolean;
+        auto_install_packages?: boolean;
+        settings: Record<string, unknown>;
+      }>;
+    }>
+  > {
+    return this.get('/sensors_config');
+  }
+
+  static async updateSensorConfig(data: {
+    enabled: boolean;
+    poll_interval_seconds: number;
+    auto_install_packages: boolean;
+    definitions: Array<{
+      name: string;
+      type: string;
+      enabled: boolean;
+      auto_install_packages?: boolean;
+      settings: Record<string, unknown>;
+    }>;
+  }): Promise<
+    ApiResponse<{
+      saved: boolean;
+      restart_required: boolean;
+      message: string;
+    }>
+  > {
+    return this.post('/sensors_config_update', data);
+  }
+
+  static async readSensors(): Promise<
+    ApiResponse<{
+      readings: Array<Record<string, unknown>>;
+      summary: {
+        enabled: boolean;
+        poll_interval_seconds: number;
+        configured: number;
+        loaded: number;
+        running: boolean;
+      };
+    }>
+  > {
+    return this.post('/sensors_read');
+  }
+
   /**
    * Handle API errors consistently
    */
   private static handleError(error: unknown): Error {
-    if (error && typeof error === 'object') {
-      const generatedError = error as { status?: unknown; error?: unknown };
-      const responseBody = generatedError.error;
-
-      if (responseBody && typeof responseBody === 'object') {
-        const body = responseBody as { error?: unknown; message?: unknown };
-        if (typeof body.error === 'string' && body.error) return new Error(body.error);
-        if (typeof body.message === 'string' && body.message) return new Error(body.message);
-      } else if (typeof responseBody === 'string' && responseBody) {
-        return new Error(responseBody);
-      }
-
-      if (typeof generatedError.status === 'number') {
-        return new Error(`HTTP ${generatedError.status}`);
-      }
-    }
-
     if (axios.isAxiosError(error)) {
       if (error.response) {
         // Server responded with error status
@@ -1503,31 +1688,6 @@ export class ApiService {
     // Something else happened
     return new Error(error instanceof Error ? error.message : 'Unknown error occurred');
   }
-}
-
-export async function fetchAuthMethods(): Promise<AuthMethods> {
-  const response = await authClient.get<AuthMethods>('/auth/methods');
-  const data = response.data;
-
-  return {
-    success: data.success === true,
-    local: data.local === true,
-    oidc: data.oidc === true,
-    oidc_provider_name: data.oidc_provider_name,
-    error: data.error,
-  };
-}
-
-export async function exchangeOidcCode(
-  oidcExchange: string,
-  clientId: string,
-): Promise<OidcExchangeResponse> {
-  const response = await authClient.post<OidcExchangeResponse>('/auth/oidc/exchange', {
-    code: oidcExchange,
-    client_id: clientId,
-  });
-
-  return response.data;
 }
 
 // Export the axios instance for direct use if needed

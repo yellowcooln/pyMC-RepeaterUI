@@ -100,15 +100,17 @@ function handleClick() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const isChild = computed(() => depth.value > 0)
+const isExpandedGroup = computed(() => isGroup.value && visibleExpanded.value)
 
 const buttonClass = computed(() => {
-  const base = `w-full rounded-[10px] py-1.5 flex items-center gap-1.5 text-sm font-medium transition-all duration-200`
-  const indent = isChild.value ? 'pl-2 pr-2' : 'pl-4 pr-2'
+  const base = `w-full rounded-[10px] py-1.5 flex items-center gap-1.5 text-sm transition-all duration-200`
+  const indent = isChild.value ? 'pl-3 pr-2' : 'pl-4 pr-2'
+  const groupState = isExpandedGroup.value ? 'bg-surface-elevated border border-stroke-subtle font-semibold' : 'border border-transparent font-medium'
 
   if (isActive.value) {
-    return `${base} ${indent} text-primary font-semibold border border-transparent`
+    return `${base} ${indent} ${groupState} text-primary`
   }
-  return `${base} ${indent} text-content-primary hover:text-primary border border-transparent`
+  return `${base} ${indent} ${groupState} text-content-primary hover:text-primary`
 })
 
 const iconClass = computed(() =>
@@ -123,8 +125,8 @@ const iconClass = computed(() =>
     'nav-item-active':    isActive,
     'nav-has-active':     hasActiveDescendant,
     'nav-precedes-active': props.precedesActive,
+    'nav-group-expanded': isExpandedGroup,
   }">
-    <span v-if="isChild" class="nav-tick" aria-hidden="true" />
     <button :class="buttonClass" @click="handleClick">
       <component :is="item.icon" v-if="item.icon" :class="iconClass" />
       <span class="nav-label flex-1 text-left">{{ item.label }}</span>
@@ -137,7 +139,7 @@ const iconClass = computed(() =>
     <Transition name="nav-expand">
       <div
         v-if="isGroup && visibleExpanded"
-        :class="['nav-children mt-0 space-y-0', depth === 0 ? 'nav-root-children ml-[23px]' : 'nav-nested-children ml-[15px]']"
+        :class="['nav-children mt-1 space-y-1', depth === 0 ? 'ml-2' : 'ml-3']"
       >
         <NavItem
           v-for="(child, i) in item.children"
@@ -164,87 +166,21 @@ const iconClass = computed(() =>
   transform: scaleY(0.95) translateY(-4px);
 }
 
-/* ── Tree lines ──────────────────────────────────────────────────────────────
- * Layer 1 (div::before): subtle structural guide — always full height, never removed.
- * Layer 2 (div::after):  primary overlay — only on the active path, no :has() needed.
- * Tick (.nav-tick span):  real DOM element so positioning is unambiguous.
- *
- * Three roles, identified by class on the child div's root:
- *   nav-item-active     — the selected leaf. Overlay stops at tick (16px).
- *   nav-has-active      — an ancestor of the selected leaf. Also stops at tick.
- *   nav-precedes-active — a sibling before the active/has-active child. Full height.
- *
- * py-1.5 child button: 6 + 20 + 6 = 32px → centre = 16px
- */
-
-.nav-children > div { position: relative; }
-
-/* ── Layer 1: subtle structural guide ── */
-.nav-children > div::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 1px;
-  background: var(--color-border-subtle);
-}
-.nav-root-children   > div:first-child::before { top: -10px; }
-.nav-nested-children > div:first-child::before { top: -8px; }
-.nav-children        > div:last-child::before  { bottom: calc(100% - 16px); }
-
-/* ── Layer 2: primary overlay ── */
-
-/* Active leaf — stops at tick */
-.nav-children > .nav-item-active::after {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: calc(100% - 16px);
-  width: 1px;
-  background: var(--color-primary);
-}
-
-/* Active ancestor — stops at tick, same as active leaf */
-.nav-children > .nav-has-active::after {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: calc(100% - 16px);
-  width: 1px;
-  background: var(--color-primary);
-}
-
-/* Preceding sibling — full height (path continues through it) */
-.nav-children > .nav-precedes-active::after {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 1px;
-  background: var(--color-primary);
-}
-
-/* First-child extensions — reach up into the parent button space */
-.nav-nested-children > div:first-child.nav-item-active::after,
-.nav-nested-children > div:first-child.nav-has-active::after,
-.nav-nested-children > div:first-child.nav-precedes-active::after { top: -8px; }
-.nav-root-children   > div:first-child.nav-item-active::after,
-.nav-root-children   > div:first-child.nav-has-active::after,
-.nav-root-children   > div:first-child.nav-precedes-active::after { top: -10px; }
-
-/* ── Hover glow — text only ──
- * Intensity is set per mode via --nav-hover-*-shadow tokens in base.css.
- */
 button:hover .nav-label { text-shadow: var(--nav-hover-label-shadow); }
 button:hover svg        { filter: var(--nav-hover-icon-shadow); }
 
-/* ── Tick ── */
-.nav-tick {
-  position: absolute;
-  left: 0; top: 16px;
-  width: 4px; height: 1px;
-  pointer-events: none;
-  background: var(--color-border-subtle);
+.nav-group-expanded > button {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
-/* Selected leaf and its ancestors get a primary tick */
-.nav-item-active > .nav-tick,
-.nav-has-active > .nav-tick {
-  background: var(--color-primary);
+
+.nav-children {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0 0.35rem 0.7rem;
+  border-left: 1px solid var(--color-border-subtle);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.nav-children > div {
+  position: relative;
 }
 </style>

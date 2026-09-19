@@ -9,10 +9,16 @@ import type { RecentPacket } from '@/types/api';
 type DataKey = 'stats' | 'packetStats' | 'noiseFloor' | 'recentPackets' | 'sparklines' | 'advertTier' | 'neighbors' | 'radioConfig';
 export type StepStatus = 'pending' | 'loading' | 'done' | 'error';
 
+// Freshness rule: the 5s WS beat delivers the fast data and stamps it via
+// noteWsDelivery, so in nominal regime the fallback sweep is silent. A TTL
+// is how stale a key may get before HTTP steps in — multiples of the beat.
 const TTL: Record<DataKey, number> = {
   stats: 30_000,
   packetStats: 60_000,
-  noiseFloor: 15_000,
+  // The curve self-maintains from the per-beat noise_floor_dbm scalar
+  // (appendNoiseFloorReading); the full 1h series is only an anti-drift
+  // re-sync, not the transport.
+  noiseFloor: 300_000,
   recentPackets: 30_000,
   sparklines: 300_000,
   advertTier: 60_000,
@@ -81,6 +87,27 @@ export const useDataService = defineStore('dataService', () => {
     } catch {
       // Non-critical — leave existing value
     }
+  }
+
+  // The WS broadcast delivered this key's data: stamp it fresh so the
+  // fallback sweep leaves HTTP alone while the socket is alive.
+  function noteWsDelivery(key: DataKey): void {
+    _lastFetch.set(key, Date.now());
+  }
+
+  function applyAdvertTierBroadcast(tier: {
+    current_tier?: string;
+    adverts_allowed?: number;
+    adverts_dropped?: number;
+    active_penalties?: number;
+  }): void {
+    advertTier.value = {
+      currentTier: typeof tier.current_tier === 'string' ? tier.current_tier : 'unknown',
+      advertsAllowed: tier.adverts_allowed ?? 0,
+      advertsDropped: tier.adverts_dropped ?? 0,
+      activePenalties: tier.active_penalties ?? 0,
+    };
+    _lastFetch.set('advertTier', Date.now());
   }
 
   async function ensure(key: DataKey): Promise<void> {
@@ -197,18 +224,23 @@ export const useDataService = defineStore('dataService', () => {
     _startPolling();
   }
 
+  // One sweep instead of one timer per key: ensure() no-ops on any key
+  // fresher than its TTL, so with a healthy WS this loop does no HTTP at
+  // all. The stats key keeps its liveness gate — lastUpdated is stamped by
+  // every WS vitals delivery, so HTTP only steps in when the socket is
+  // silent.
   function _startPolling(): void {
     stopPolling();
 
-    _pollHandles.push(window.setInterval(() => void ensure('advertTier'), 30_000));
-    _pollHandles.push(window.setInterval(() => void ensure('packetStats'), 60_000));
-    _pollHandles.push(window.setInterval(() => void ensure('noiseFloor'), 15_000));
-    _pollHandles.push(window.setInterval(() => void ensure('sparklines'), 300_000));
     _pollHandles.push(
       window.setInterval(() => {
         const lastUpdate = systemStore.lastUpdated?.getTime() ?? 0;
         if (Date.now() - lastUpdate > 25_000) void ensure('stats');
-      }, 30_000),
+        void ensure('advertTier');
+        void ensure('packetStats');
+        void ensure('noiseFloor');
+        void ensure('sparklines');
+      }, 15_000),
     );
   }
 
@@ -236,9 +268,11 @@ export const useDataService = defineStore('dataService', () => {
     const tenMinutesAgo = Math.floor(Date.now() / 1000) - 600;
     const since = _disconnectTime !== null ? Math.max(_disconnectTime, tenMinutesAgo) : tenMinutesAgo;
     _disconnectTime = null;
+    invalidate('noiseFloor');
     await Promise.allSettled([
       ensure('stats'),
       ensure('packetStats'),
+      ensure('noiseFloor'),
       _recoverPackets(since),
     ]);
   }
@@ -276,6 +310,8 @@ export const useDataService = defineStore('dataService', () => {
     loadProgress,
     bootstrap,
     ensure,
+    noteWsDelivery,
+    applyAdvertTierBroadcast,
     invalidate,
     noteDisconnect,
     onReconnect,

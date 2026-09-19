@@ -148,7 +148,7 @@ defineExpose({ hoveredPoint })
         class="pointer-events-none px-2.5 py-2 rounded text-sm leading-snug bg-surface-elevated dark:bg-surface-elevated border border-stroke-subtle dark:border-white/opacity-medium text-content-primary whitespace-nowrap shadow-lg"
         :style="tooltipStyle"
       >
-        {{ hoveredTime }}: <span class="font-medium">{{ hoveredPoint.value }}{{ unit ? ` ${unit}` : '' }}</span>
+        {{ hoveredTime }}: <span class="font-medium">{{ hoveredPoint.value.toFixed(1) }}{{ unit ? ` ${unit}` : '' }}</span>
       </div>
     </Teleport>
   </div>

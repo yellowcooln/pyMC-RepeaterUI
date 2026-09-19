@@ -9,13 +9,27 @@ import RestartModal from '@/components/modals/RestartModal.vue';
 import TxPowerNoticeModal from '@/components/modals/TxPowerNoticeModal.vue';
 import UnsavedChangesModal from '@/components/ui/UnsavedChangesModal.vue';
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges';
+import { useMultiRadioConfig } from '@/composables/useMultiRadioConfig';
 
 const router = useRouter();
 const systemStore = useSystemStore();
 const dataService = useDataService();
 const setupStore = useSetupStore();
 
-const radioConfig = computed(() => systemStore.stats?.config?.radio || {});
+const {
+  isMultiRadio,
+  radioOptions,
+  effectiveSelectedId,
+  activeRadioAirConfig,
+  defaultRadioId,
+  txMode,
+  fabric,
+  selectRadio,
+  ensureSelection,
+} = useMultiRadioConfig();
+
+// Legacy top-level radio OR selected radios[] entry air settings.
+const radioConfig = computed(() => activeRadioAirConfig.value || {});
 const cadConfig = computed(() => (systemStore.stats?.config?.radio as any)?.cad ?? {});
 
 // Editable form values
@@ -51,21 +65,33 @@ const bandwidthOptions = [
   { value: 500, label: '500 kHz' },
 ];
 
+function loadFormFromConfig(config: Record<string, any>) {
+  frequencyMHz.value = config.frequency ? Number((config.frequency / 1000000).toFixed(3)) : 0;
+  spreadingFactor.value = config.spreading_factor ?? 0;
+  bandwidthKHz.value = config.bandwidth ? Number((config.bandwidth / 1000).toFixed(1)) : 0;
+  txPower.value = config.tx_power ?? 0;
+  codingRate.value = config.coding_rate ?? 0;
+  preambleLength.value = config.preamble_length ?? 0;
+}
+
 // Load current values into form
 watch(
   radioConfig,
   (config) => {
     if (config && !isEditing.value) {
-      frequencyMHz.value = config.frequency ? Number((config.frequency / 1000000).toFixed(3)) : 0;
-      spreadingFactor.value = config.spreading_factor ?? 0;
-      bandwidthKHz.value = config.bandwidth ? Number((config.bandwidth / 1000).toFixed(1)) : 0;
-      txPower.value = config.tx_power ?? 0;
-      codingRate.value = config.coding_rate ?? 0;
-      preambleLength.value = config.preamble_length ?? 0;
+      loadFormFromConfig(config);
     }
   },
   { immediate: true },
 );
+
+// Multi-radio: switching the selected radio reloads air settings (view mode).
+watch(effectiveSelectedId, () => {
+  ensureSelection();
+  if (!isEditing.value) {
+    loadFormFromConfig(radioConfig.value || {});
+  }
+});
 
 // Formatted display values
 const formattedFrequency = computed(() => {
@@ -168,13 +194,17 @@ const saveChanges = async ({ silent = false }: { silent?: boolean } = {}): Promi
       return false;
     }
 
-    const payload: Record<string, number> = {};
+    const payload: Record<string, number | string> = {};
 
     if (frequencyMHz.value) payload.frequency = frequencyMHz.value * 1000000;
     if (spreadingFactor.value) payload.spreading_factor = spreadingFactor.value;
     if (bandwidthKHz.value) payload.bandwidth = bandwidthKHz.value * 1000;
     if (txPower.value || txPower.value === 0) payload.tx_power = txPower.value;
     if (codingRate.value) payload.coding_rate = codingRate.value;
+    if (preambleLength.value) payload.preamble_length = preambleLength.value;
+    if (isMultiRadio.value && effectiveSelectedId.value) {
+      payload.radio_id = effectiveSelectedId.value;
+    }
 
     const response = await apiClient.post('/update_radio_config', payload);
     const data = response.data as any;
@@ -264,7 +294,7 @@ defineExpose({ requestLeave, isEditing });
     <div class="cfg-page-heading flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
       <div>
         <h3 class="text-base sm:text-lg font-semibold text-content-primary mb-1 sm:mb-2">Radio Settings</h3>
-        <p class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">Configure LoRa radio parameters and frequency presets</p>
+        <p class="text-content-secondary dark:text-content-muted text-xs sm:text-sm">Configure LoRa radio parameters and frequency presets<span v-if="isMultiRadio"> for the selected radio</span></p>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <template v-if="!isEditing">
@@ -298,6 +328,37 @@ defineExpose({ requestLeave, isEditing });
           </button>
         </template>
       </div>
+    </div>
+
+    <!-- Multi-radio selector (only when config.radios[] is present) -->
+    <div
+      v-if="isMultiRadio"
+      class="cfg-section rounded-xl border border-stroke-subtle dark:border-stroke/opacity-light p-3 sm:p-4 space-y-3"
+    >
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <div class="text-sm font-semibold text-content-primary">Active radio</div>
+          <div class="text-xs text-content-muted">
+            Edit LoRa air settings for one radios[] entry. Default TX:
+            <span class="font-mono">{{ defaultRadioId }}</span>
+            · mode
+            <span class="font-mono">{{ txMode }}</span>
+          </div>
+        </div>
+        <select
+          class="cfg-select w-full sm:w-64"
+          :value="effectiveSelectedId"
+          :disabled="isEditing"
+          @change="selectRadio(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="opt in radioOptions" :key="opt.id" :value="opt.id">
+            {{ opt.id }}{{ opt.isDefault ? ' (default)' : '' }} — {{ opt.radio_type }}
+          </option>
+        </select>
+      </div>
+      <p v-if="isEditing" class="text-xs text-content-muted">
+        Finish or cancel editing before switching radios.
+      </p>
     </div>
 
     <!-- Error Message -->

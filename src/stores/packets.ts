@@ -491,11 +491,20 @@ export const usePacketStore = defineStore('packets', () => {
     isLoading.value = false;
   }
 
+  function packetIdentityKey(packet: Pick<RecentPacket, 'id' | 'packet_hash' | 'timestamp' | 'type' | 'route' | 'src_hash' | 'dst_hash' | 'length'>) {
+    if (packet.id != null) return `id:${packet.id}`;
+    const hash = packet.packet_hash?.trim();
+    if (!hash) {
+      return `fallback:${packet.timestamp}:${packet.type}:${packet.route}:${packet.src_hash}:${packet.dst_hash}:${packet.length}`;
+    }
+    return `hash:${hash}:${packet.timestamp}:${packet.type}:${packet.route}:${packet.src_hash}:${packet.dst_hash}:${packet.length}`;
+  }
+
   function addRealtimePacket(packet: RecentPacket) {
-    const packetIdentity = packet.id ?? packet.packet_hash;
+    const packetKey = packetIdentityKey(packet);
     recentPackets.value = [
       packet,
-      ...recentPackets.value.filter((existing) => (existing.id ?? existing.packet_hash) !== packetIdentity),
+      ...recentPackets.value.filter((existing) => packetIdentityKey(existing) !== packetKey),
     ];
     if (recentPackets.value.length > 1000) {
       recentPackets.value = recentPackets.value.slice(0, 1000);
@@ -503,8 +512,8 @@ export const usePacketStore = defineStore('packets', () => {
   }
 
   function mergeRecentPackets(incoming: RecentPacket[]): void {
-    const existing = new Set(recentPackets.value.map((p) => p.id ?? p.packet_hash));
-    const novel = incoming.filter((p) => !existing.has(p.id ?? p.packet_hash));
+    const existing = new Set(recentPackets.value.map((packet) => packetIdentityKey(packet)));
+    const novel = incoming.filter((packet) => !existing.has(packetIdentityKey(packet)));
     if (novel.length === 0) return;
     const merged = [...novel, ...recentPackets.value];
     merged.sort((a, b) => b.timestamp - a.timestamp);

@@ -61,6 +61,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/plugins',
+      name: 'plugins',
+      component: () => import('@/views/Plugins.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/sensors',
       name: 'sensors',
       component: () => import('@/views/Sensors.vue'),
@@ -94,6 +100,12 @@ const router = createRouter({
       path: '/companions',
       name: 'companions',
       component: () => import('@/views/Companions.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/packet-archive',
+      name: 'packet-archive',
+      component: () => import('@/views/PacketArchive.vue'),
       meta: { requiresAuth: true },
     },
     {

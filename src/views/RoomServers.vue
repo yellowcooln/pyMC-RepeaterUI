@@ -7,7 +7,10 @@ import ConfirmDialog from '@/components/modals/ConfirmDialog.vue';
 import MessageDialog from '@/components/modals/MessageDialog.vue';
 import RestartModal from '@/components/modals/RestartModal.vue';
 import LocationPicker from '@/components/modals/LocationPicker.vue';
+import MeshCoreQrModal from '@/components/modals/MeshCoreQrModal.vue';
 import Spinner from '@/components/ui/Spinner.vue';
+import { buildMeshCoreAddContactUrl, isValidMeshCorePublicKey } from '@/utils/meshcoreQr';
+import { QrCode } from '@lucide/vue';
 
 defineOptions({ name: 'RoomServersView' });
 
@@ -51,6 +54,10 @@ const messageDialogContent = ref({
   message: '',
   variant: 'success' as 'success' | 'error' | 'info',
 });
+const showQrModal = ref(false);
+const qrModalTitle = ref('');
+const qrModalSubtitle = ref('');
+const qrModalValue = ref('');
 
 // Room Messages Dialog states
 const showMessagesDialog = ref(false);
@@ -78,6 +85,8 @@ const newIdentity = ref({
     node_name: '',
     latitude: 0,
     longitude: 0,
+    flood_advert_interval_hours: 0,
+    direct_advert_interval_hours: 0,
     admin_password: '',
     guest_password: '',
     allow_read_only: true,
@@ -211,6 +220,12 @@ function openEditModal(identity: unknown) {
     editingIdentity.value.settings.allow_read_only = true;
   if (editingIdentity.value.settings.latitude == null) editingIdentity.value.settings.latitude = 0;
   if (editingIdentity.value.settings.longitude == null) editingIdentity.value.settings.longitude = 0;
+  if (editingIdentity.value.settings.flood_advert_interval_hours == null) {
+    editingIdentity.value.settings.flood_advert_interval_hours = 0;
+  }
+  if (editingIdentity.value.settings.direct_advert_interval_hours == null) {
+    editingIdentity.value.settings.direct_advert_interval_hours = 0;
+  }
   showKeyInEdit.value = false;
   showEditModal.value = true;
 }
@@ -224,6 +239,8 @@ function resetForm() {
       node_name: '',
       latitude: repeaterLat.value,
       longitude: repeaterLng.value,
+      flood_advert_interval_hours: 0,
+      direct_advert_interval_hours: 0,
       admin_password: '',
       guest_password: '',
       allow_read_only: true,
@@ -427,6 +444,28 @@ function getClientSession(authorPubkey: string) {
       client.public_key_full === authorPubkey || authorPubkey.startsWith(client.public_key),
   );
   return session;
+}
+
+function openRoomServerQr(identity: any) {
+  const publicKey = identity?.public_key;
+  if (!isValidMeshCorePublicKey(publicKey)) {
+    showMessage('Room server public key is missing or invalid for QR export.', 'error');
+    return;
+  }
+
+  const contactName = identity?.settings?.node_name || identity?.name || 'Room Server';
+  qrModalTitle.value = `Room Server QR: ${contactName}`;
+  qrModalSubtitle.value = 'Scan in MeshCore app to add as a room server contact (type=3).';
+  qrModalValue.value = buildMeshCoreAddContactUrl({
+    name: contactName,
+    publicKey,
+    type: 3,
+  });
+  showQrModal.value = true;
+}
+
+function closeQrModal() {
+  showQrModal.value = false;
 }
 
 async function removeClient(publicKey: string, identityHash?: string) {
@@ -690,6 +729,13 @@ async function removeClient(publicKey: string, identityHash?: string) {
                     {{ identity.settings?.latitude || 0 }}, {{ identity.settings?.longitude || 0 }}
                   </span>
                 </div>
+                <div>
+                  <span class="text-content-muted">Advert Intervals:</span>
+                  <span class="text-content-primary/opacity-heavy ml-2">
+                    Flood {{ identity.settings?.flood_advert_interval_hours ?? 0 }}h /
+                    Direct {{ identity.settings?.direct_advert_interval_hours ?? 0 }}h
+                  </span>
+                </div>
                 <div v-if="identity.settings?.admin_password || identity.settings?.guest_password">
                   <span class="text-content-muted">Password Roles:</span>
                   <span class="text-content-primary/opacity-heavy ml-2">
@@ -719,6 +765,25 @@ async function removeClient(publicKey: string, identityHash?: string) {
                     </span>
                   </span>
                 </div>
+              </div>
+
+              <div class="text-xs text-content-muted">
+                <span class="text-content-muted">Public Key:</span>
+                <span
+                  v-if="identity.public_key"
+                  class="ml-2 font-mono text-content-primary/opacity-heavy break-all"
+                  >{{ identity.public_key }}</span
+                >
+                <span v-else class="ml-2 text-content-muted">—</span>
+                <button
+                  class="ml-2 inline-flex items-center gap-1.5 rounded-[8px] border border-stroke-subtle dark:border-stroke/opacity-medium px-2 py-1 text-[11px] text-content-secondary hover:text-content-primary hover:border-primary/opacity-heavy transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!isValidMeshCorePublicKey(identity.public_key)"
+                  @click="openRoomServerQr(identity)"
+                  title="Show MeshCore add-contact QR"
+                >
+                  <QrCode class="h-3.5 w-3.5" />
+                  <span>QR</span>
+                </button>
               </div>
 
               <div
@@ -961,6 +1026,31 @@ async function removeClient(publicKey: string, identityHash?: string) {
           <!-- Passwords -->
           <div class="grid grid-cols-2 gap-5">
             <div>
+              <label class="modal-field-label">Flood Advert Interval (hours)</label>
+              <input
+                v-model.number="newIdentity.settings.flood_advert_interval_hours"
+                type="number"
+                min="0"
+                max="168"
+                class="modal-input"
+              />
+              <p class="text-content-secondary dark:text-content-muted text-xs mt-1">0 = disabled, 1-168 hours</p>
+            </div>
+            <div>
+              <label class="modal-field-label">Direct Advert Interval (hours)</label>
+              <input
+                v-model.number="newIdentity.settings.direct_advert_interval_hours"
+                type="number"
+                min="0"
+                max="168"
+                class="modal-input"
+              />
+              <p class="text-content-secondary dark:text-content-muted text-xs mt-1">0 = disabled, 1-168 hours</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-5">
+            <div>
               <label class="modal-field-label">Admin Password (Optional)</label>
               <input
                 v-model="newIdentity.settings.admin_password"
@@ -1149,6 +1239,31 @@ async function removeClient(publicKey: string, identityHash?: string) {
           <!-- Passwords -->
           <div class="grid grid-cols-2 gap-5">
             <div>
+              <label class="modal-field-label">Flood Advert Interval (hours)</label>
+              <input
+                v-model.number="editingIdentity.settings.flood_advert_interval_hours"
+                type="number"
+                min="0"
+                max="168"
+                class="modal-input"
+              />
+              <p class="text-content-secondary dark:text-content-muted text-xs mt-1">0 = disabled, 1-168 hours</p>
+            </div>
+            <div>
+              <label class="modal-field-label">Direct Advert Interval (hours)</label>
+              <input
+                v-model.number="editingIdentity.settings.direct_advert_interval_hours"
+                type="number"
+                min="0"
+                max="168"
+                class="modal-input"
+              />
+              <p class="text-content-secondary dark:text-content-muted text-xs mt-1">0 = disabled, 1-168 hours</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-5">
+            <div>
               <label class="modal-field-label">Admin Password (Optional)</label>
               <input
                 v-model="editingIdentity.settings.admin_password"
@@ -1236,6 +1351,14 @@ async function removeClient(publicKey: string, identityHash?: string) {
   <RestartModal
     v-model="showRestartModal"
     message="Room server settings have been saved. A service restart is required for the changes to take effect."
+  />
+
+  <MeshCoreQrModal
+    :is-open="showQrModal"
+    :title="qrModalTitle"
+    :subtitle="qrModalSubtitle"
+    :value="qrModalValue"
+    @close="closeQrModal"
   />
 
 

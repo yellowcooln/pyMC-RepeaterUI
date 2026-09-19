@@ -10,6 +10,19 @@ import SignalBars from '@/components/ui/SignalBars.vue';
 import { useSignalQuality } from '@/composables/useSignalQuality';
 import { getPreference, setPreference } from '@/utils/preferences';
 
+const props = withDefaults(
+  defineProps<{
+    mode?: 'dashboard' | 'archive';
+    title?: string;
+    defaultHours?: number;
+  }>(),
+  {
+    mode: 'dashboard',
+    title: 'Recent Packets',
+    defaultHours: 24,
+  },
+);
+
 defineOptions({ name: 'PacketTable' });
 
 const packetStore = usePacketStore();
@@ -17,6 +30,45 @@ const { getSignalQualityFromSNR } = useSignalQuality();
 const dataService = useDataService();
 const currentPage = ref(1);
 const itemsPerPage = 10;
+
+const archiveStart = ref<number>(Math.floor((Date.now() - props.defaultHours * 60 * 60 * 1000) / 1000));
+const archiveEnd = ref<number>(Math.floor(Date.now() / 1000));
+const archiveQuery = ref('');
+const archiveRangeOptions = [
+  { label: '1h', hours: 1 },
+  { label: '6h', hours: 6 },
+  { label: '24h', hours: 24 },
+  { label: '7d', hours: 24 * 7 },
+  { label: '30d', hours: 24 * 30 },
+] as const;
+const archiveAutoUpdateEnabled = ref<boolean>(
+  getPreference('packetArchive_autoUpdateEnabled', true),
+);
+const archiveSnapshotPackets = ref<RecentPacket[]>([]);
+
+const toDatetimeLocalInputValue = (value: number): string => {
+  const dt = new Date(value * 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+};
+
+const archiveStartInput = computed({
+  get: () => toDatetimeLocalInputValue(archiveStart.value),
+  set: (value: string) => {
+    if (!value) return;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) archiveStart.value = Math.floor(parsed.getTime() / 1000);
+  },
+});
+
+const archiveEndInput = computed({
+  get: () => toDatetimeLocalInputValue(archiveEnd.value),
+  set: (value: string) => {
+    if (!value) return;
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) archiveEnd.value = Math.floor(parsed.getTime() / 1000);
+  },
+});
 
 // Record limit management
 const currentLimit = ref(100);
@@ -139,12 +191,20 @@ const closeModal = () => {
 // Filter states
 const selectedType = ref<string>(getPreference('packetTable_selectedType', 'all'));
 const selectedRoute = ref<string>(getPreference('packetTable_selectedRoute', 'all'));
+const selectedDropReason = ref<string>(getPreference('packetArchive_selectedDropReason', 'all'));
 const showOnlyNewPackets = ref<boolean>(false); // Don't persist - temporary filter
 const newPacketsTimestamp = ref<number | null>(null);
 
 // Available filter options
 const packetTypes = ['all', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'];
-const routeTypes = ['all', '1', '2'];
+const routeOptions = [
+  { value: 'all', label: 'All Routes' },
+  { value: '0', label: 'flood_transport' },
+  { value: '1', label: 'flood' },
+  { value: '2', label: 'direct' },
+  { value: '3', label: 'direct_transport' },
+] as const;
+const DROP_REASON_NONE = '__none__';
 const expandedDuplicateGroups = ref<Set<string>>(new Set());
 
 interface PacketGroup {
@@ -167,18 +227,104 @@ interface PacketRowMeta {
 watch(selectedType, (value) => {
   setPreference('packetTable_selectedType', value);
   currentPage.value = 1; // Reset to page 1 when filter changes
+  if (props.mode === 'archive') {
+    void fetchData();
+  }
 });
 
 watch(selectedRoute, (value) => {
   setPreference('packetTable_selectedRoute', value);
+  currentPage.value = 1; // Reset to page 1 when filter changes
+  if (props.mode === 'archive') {
+    void fetchData();
+  }
+});
+
+watch(selectedDropReason, (value) => {
+  setPreference('packetArchive_selectedDropReason', value);
   currentPage.value = 1; // Reset to page 1 when filter changes
 });
 watch(showOnlyNewPackets, () => {
   currentPage.value = 1; // Reset to page 1 when filter changes
 });
 
+watch(
+  [archiveStart, archiveEnd],
+  () => {
+    currentPage.value = 1;
+    if (props.mode === 'archive') {
+      void fetchData();
+    }
+  },
+  { flush: 'post' },
+);
+
+watch(archiveQuery, () => {
+  currentPage.value = 1;
+});
+
+watch(archiveAutoUpdateEnabled, (enabled) => {
+  setPreference('packetArchive_autoUpdateEnabled', enabled);
+
+  if (props.mode !== 'archive') return;
+
+  if (enabled) {
+    void fetchData();
+    return;
+  }
+
+  archiveSnapshotPackets.value = [...packetStore.recentPackets];
+});
+
+const packetSource = computed(() => {
+  if (props.mode === 'archive' && !archiveAutoUpdateEnabled.value) {
+    return archiveSnapshotPackets.value;
+  }
+  return packetStore.recentPackets;
+});
+
+function normalizeDropReason(reason: string | null | undefined): string {
+  if (!reason) return '';
+  return reason.trim().toLowerCase();
+}
+
+const dropReasonOptions = computed(() => {
+  const uniqueReasons = new Map<string, string>();
+
+  for (const packet of packetSource.value) {
+    const normalized = normalizeDropReason(packet.drop_reason);
+    if (!normalized || uniqueReasons.has(normalized)) continue;
+    uniqueReasons.set(normalized, packet.drop_reason!.trim());
+  }
+
+  const options = [{ value: 'all', label: 'All Drop Reasons' }, { value: DROP_REASON_NONE, label: 'No drop reason' }];
+  for (const [value, label] of uniqueReasons.entries()) {
+    options.push({ value, label });
+  }
+  return options;
+});
+
+const setArchiveRange = (hours: number) => {
+  const now = Math.floor(Date.now() / 1000);
+  archiveEnd.value = now;
+  archiveStart.value = Math.floor(now - hours * 60 * 60);
+};
+
+const formatArchiveRange = computed(() => {
+  if (archiveEnd.value <= archiveStart.value) return 'Custom range';
+  const start = new Date(archiveStart.value * 1000);
+  const end = new Date(archiveEnd.value * 1000);
+  return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${start.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })} → ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${end.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
+});
+
 const filteredPackets = computed(() => {
-  let filtered = packetStore.recentPackets;
+  let filtered = packetSource.value;
 
   if (selectedType.value !== 'all') {
     const typeNum = parseInt(selectedType.value);
@@ -186,8 +332,41 @@ const filteredPackets = computed(() => {
   }
 
   if (selectedRoute.value !== 'all') {
-    const routeNum = parseInt(selectedRoute.value);
-    filtered = filtered.filter((packet) => packet.route === routeNum);
+    filtered = filtered.filter((packet) => getRouteFilterValue(packet.route) === selectedRoute.value);
+  }
+
+  if (props.mode === 'archive' && selectedDropReason.value !== 'all') {
+    if (selectedDropReason.value === DROP_REASON_NONE) {
+      filtered = filtered.filter((packet) => !normalizeDropReason(packet.drop_reason));
+    } else {
+      filtered = filtered.filter(
+        (packet) => normalizeDropReason(packet.drop_reason) === selectedDropReason.value,
+      );
+    }
+  }
+
+  if (props.mode === 'archive' && archiveQuery.value.trim()) {
+    const query = archiveQuery.value.trim().toLowerCase();
+    filtered = filtered.filter((packet) => {
+      const searchable = [
+        packet.packet_hash,
+        packet.src_hash,
+        packet.dst_hash,
+        packet.rx_radio_id,
+        packet.tx_radio_id,
+        packet.drop_reason,
+        getPacketTypeName(packet.type),
+        getRouteTypeName(packet.route),
+        packet.payload,
+        packet.header,
+        packet.raw_packet,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(query);
+    });
   }
 
   // Filter for new packets only if enabled
@@ -225,16 +404,20 @@ const filteredPacketGroups = computed<PacketGroup[]>(() => {
   });
 
   return orderedGroups.map((group) => {
-    const masterPrimaryIndex = group.packets.findIndex((packet) => !packet.is_duplicate);
-    const preferredPrimaryIndex =
-      masterPrimaryIndex >= 0
-        ? masterPrimaryIndex
-        : group.packets.findIndex((packet) => packet.transmitted && !packet.drop_reason);
-    const fallbackPrimaryIndex =
-      preferredPrimaryIndex >= 0
-        ? preferredPrimaryIndex
+    // For grouped hash variants, show the copy that actually forwarded first.
+    // This keeps RX/TX radio ids aligned with what operators see in TX logs.
+    const forwardedIndex = group.packets.findIndex(
+      (packet) => packet.transmitted && !packet.drop_reason,
+    );
+    const transmittedIndex =
+      forwardedIndex >= 0
+        ? forwardedIndex
         : group.packets.findIndex((packet) => packet.transmitted);
-    const primaryIndex = fallbackPrimaryIndex >= 0 ? fallbackPrimaryIndex : 0;
+    const nonDuplicateIndex =
+      transmittedIndex >= 0
+        ? transmittedIndex
+        : group.packets.findIndex((packet) => !packet.is_duplicate);
+    const primaryIndex = nonDuplicateIndex >= 0 ? nonDuplicateIndex : 0;
     const primary = group.packets[primaryIndex];
     const duplicates = group.packets.filter((_, index) => index !== primaryIndex);
     return {
@@ -435,21 +618,97 @@ const getPacketTypeName = (type: number) => {
   return typeNames[type] || `TYPE_${type}`;
 };
 
-const getRouteTypeName = (route: number) => {
-  const routeNames: Record<number, string> = {
-    0: 'T-Flood',
-    1: 'Flood',
-    2: 'Direct',
-    3: 'T-Direct',
+function getRouteFilterValue(route: number | string | null | undefined): string {
+  if (route == null) return '';
+
+  if (typeof route === 'number' && Number.isFinite(route)) {
+    return String(route);
+  }
+
+  const normalized = String(route).trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    flood_transport: '0',
+    transport_flood: '0',
+    't-flood': '0',
+    flood: '1',
+    direct: '2',
+    direct_transport: '3',
+    transport_direct: '3',
+    't-direct': '3',
   };
-  return routeNames[route] || `Route ${route}`;
+
+  if (normalized in aliases) {
+    return aliases[normalized];
+  }
+
+  return normalized;
+}
+
+function getRouteTypeName(route: number | string) {
+  const routeNames: Record<string, string> = {
+    '0': 'flood_transport',
+    '1': 'flood',
+    '2': 'direct',
+    '3': 'direct_transport',
+  };
+  const routeValue = getRouteFilterValue(route);
+  return routeNames[routeValue] || `Route ${route}`;
+}
+
+const getGroupSummary = (group: PacketGroup) => {
+  const forwardedCount = group.packets.filter(
+    (packet) => packet.transmitted && !packet.drop_reason,
+  ).length;
+  const droppedCount = group.packets.filter((packet) => Boolean(packet.drop_reason)).length;
+
+  if (forwardedCount > 0 && droppedCount > 0) {
+    return {
+      label: `Forwarded — ${droppedCount} duplicate${droppedCount === 1 ? '' : 's'} dropped`,
+      className: 'text-accent-green',
+      forwardedCount,
+      droppedCount,
+    };
+  }
+
+  if (forwardedCount > 0) {
+    return {
+      label: 'Forwarded',
+      className: 'text-accent-green',
+      forwardedCount,
+      droppedCount,
+    };
+  }
+
+  if (droppedCount > 0) {
+    return {
+      label: `Dropped — ${droppedCount} ${droppedCount === 1 ? 'copy' : 'copies'} rejected`,
+      className: 'text-accent-red',
+      forwardedCount,
+      droppedCount,
+    };
+  }
+
+  return {
+    label: 'Received',
+    className: 'text-primary',
+    forwardedCount,
+    droppedCount,
+  };
 };
 
 const getStatusClass = (packet: RecentPacket) => {
+  const group = getPacketMeta(packet)?.group;
+  if (group && getPacketMeta(packet)?.isPrimary) {
+    return getGroupSummary(group).className;
+  }
   return packet.transmitted ? 'text-accent-green' : 'text-primary';
 };
 
 const getStatusText = (packet: RecentPacket) => {
+  const meta = getPacketMeta(packet);
+  if (meta?.isPrimary && meta.group.hasDuplicates) {
+    return getGroupSummary(meta.group).label;
+  }
   if (packet.drop_reason) {
     return 'Dropped';
   }
@@ -469,11 +728,12 @@ const getPacketRowClass = (packet: RecentPacket) => {
   return '';
 };
 
-const getRouteClass = (route: number) => {
-  return route === 1
+function getRouteClass(route: number | string) {
+  const routeValue = getRouteFilterValue(route);
+  return routeValue === '0' || routeValue === '1'
     ? 'bg-badge-cyan-bg text-badge-cyan-text'
     : 'bg-badge-neutral-bg text-badge-neutral-text';
-};
+}
 
 const getPacketTypeIndicatorColor = (type: number) => {
   const colors: Record<number, string> = {
@@ -527,6 +787,12 @@ const formatDelay = (delayMs: number): string => {
     return (delayMs / 1000).toFixed(2) + 's';
   }
   return delayMs.toFixed(1) + 'ms';
+};
+
+const formatRadioId = (value?: string | null): string => {
+  if (typeof value !== 'string') return 'N/A';
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : 'N/A';
 };
 
 // Parse JSON path string into array
@@ -646,6 +912,9 @@ const getAdvertNodeName = (packet: RecentPacket): string | null => {
 const resetFilters = () => {
   selectedType.value = 'all';
   selectedRoute.value = 'all';
+  if (props.mode === 'archive') {
+    selectedDropReason.value = 'all';
+  }
   showOnlyNewPackets.value = false;
   newPacketsTimestamp.value = null;
   currentPage.value = 1;
@@ -674,7 +943,24 @@ const formatFilterTime = computed(() => {
 
 const fetchData = async (limit?: number) => {
   try {
-    const fetchLimit = limit || currentLimit.value;
+    const fetchLimit = limit ?? currentLimit.value;
+    if (props.mode === 'archive') {
+      const typeFilter = selectedType.value === 'all' ? undefined : Number(selectedType.value);
+      const routeFilter = selectedRoute.value === 'all' ? undefined : Number(selectedRoute.value);
+      const packets = await packetStore.fetchFilteredPackets({
+        type: typeFilter,
+        route: routeFilter,
+        start_timestamp: archiveStart.value,
+        end_timestamp: archiveEnd.value,
+        limit: fetchLimit,
+      });
+
+      if (packets) {
+        archiveSnapshotPackets.value = [...packets];
+      }
+      return;
+    }
+
     await packetStore.fetchRecentPackets({ limit: fetchLimit });
   } catch (error) {
     console.error('Error fetching packet data:', error);
@@ -699,6 +985,11 @@ const loadMoreRecords = async () => {
 };
 
 onMounted(() => {
+  if (props.mode === 'archive') {
+    void fetchData();
+    return;
+  }
+
   // Bootstrap already loaded recentPackets; this is a safety net for edge cases.
   // WS push handles live updates; no polling needed.
   void dataService.ensure('recentPackets');
@@ -716,22 +1007,32 @@ onBeforeUnmount(() => {
   <div class="glass-card w-full max-w-none rounded-[20px] p-6">
     <!-- Header with title and filters -->
     <div
-      class="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 gap-4 filter-container"
+      class="flex flex-col mb-6 gap-4 filter-container"
+      :class="{
+        'lg:flex-row lg:justify-between lg:items-center': props.mode !== 'archive',
+      }"
     >
       <div class="flex items-center gap-2 header-info relative">
         <h3 class="text-content-primary text-xl font-semibold">
-          Recent Packets
+          {{ props.title }}
         </h3>
         <span class="text-content-secondary dark:text-content-muted text-sm packet-count">
           ({{ filteredPackets.length }} of {{ packetStore.recentPackets.length }})
         </span>
         <span
-          v-if="showOnlyNewPackets"
+          v-if="showOnlyNewPackets && props.mode !== 'archive'"
           class="text-primary text-xs sm:text-sm bg-primary/opacity-light px-2 py-1 rounded-md border border-primary/opacity-medium live-mode-badge whitespace-nowrap"
           :title="`Filter activated at ${formatFilterTime}`"
         >
           <span class="hidden sm:inline">Live Mode (since {{ formatFilterTime }})</span>
           <span class="sm:hidden">Live</span>
+        </span>
+        <span
+          v-if="props.mode === 'archive'"
+          class="text-primary text-xs sm:text-sm bg-primary/opacity-light px-2 py-1 rounded-md border border-primary/opacity-medium live-mode-badge whitespace-nowrap"
+          :title="formatArchiveRange"
+        >
+          {{ formatArchiveRange }}
         </span>
         <!-- <transition name="fade">
           <div v-if="showLoadingIndicator" class="absolute -right-6 top-1/2 -translate-y-1/2 text-primary loading-indicator">
@@ -743,8 +1044,92 @@ onBeforeUnmount(() => {
         }}</span>
       </div>
 
-      <!-- Desktop: Horizontal layout, Mobile: Grid layout -->
-      <div class="flex items-center gap-3 lg:flex filter-controls">
+      <!-- Filter Controls -->
+      <div class="filter-controls w-full" :class="{ 'archive-filter-controls': props.mode === 'archive' }">
+        <div v-if="props.mode === 'archive'" class="archive-controls">
+          <div class="flex flex-col archive-search-control">
+            <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Search</label>
+            <div class="relative">
+              <input
+                v-model="archiveQuery"
+                type="search"
+                placeholder="hash, src, dst, payload..."
+                class="glass-card border border-stroke-subtle dark:border-stroke rounded-[10px] px-3 py-2 pr-9 text-content-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium transition-all duration-200 archive-search-input"
+              />
+              <button
+                v-if="archiveQuery"
+                type="button"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary"
+                aria-label="Clear search"
+                @click="archiveQuery = ''"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div class="archive-meta-controls">
+            <div class="flex flex-col archive-range-control">
+              <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Range</label>
+              <div class="archive-range-buttons">
+                <button
+                  v-for="option in archiveRangeOptions"
+                  :key="option.label"
+                  type="button"
+                  class="glass-card border rounded-[10px] px-2.5 py-2 text-xs transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-primary/opacity-medium"
+                  :class="{
+                    'border-primary bg-primary/opacity-light text-primary':
+                      Math.abs(archiveEnd - archiveStart - option.hours * 60 * 60) < 120,
+                    'border-stroke-subtle dark:border-stroke text-content-secondary dark:text-content-muted hover:border-primary dark:hover:border-primary hover:text-content-primary dark:hover:text-content-primary':
+                      Math.abs(archiveEnd - archiveStart - option.hours * 60 * 60) >= 120,
+                  }"
+                  @click="setArchiveRange(option.hours)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-col">
+              <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Start</label>
+              <input
+                v-model="archiveStartInput"
+                type="datetime-local"
+                class="glass-card border border-stroke-subtle dark:border-stroke rounded-[10px] px-3 py-2 text-content-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium transition-all duration-200 w-full"
+              />
+            </div>
+
+            <div class="flex flex-col">
+              <label class="text-content-secondary dark:text-content-muted text-xs mb-1">End</label>
+              <input
+                v-model="archiveEndInput"
+                type="datetime-local"
+                class="glass-card border border-stroke-subtle dark:border-stroke rounded-[10px] px-3 py-2 text-content-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium transition-all duration-200 w-full"
+              />
+            </div>
+
+            <div class="flex flex-col">
+              <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Updates</label>
+              <button
+                type="button"
+                class="glass-card border rounded-[10px] px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-primary/opacity-medium w-full"
+                :class="{
+                  'border-primary bg-primary/opacity-light text-primary': archiveAutoUpdateEnabled,
+                  'border-stroke-subtle dark:border-stroke text-content-secondary dark:text-content-muted hover:border-primary dark:hover:border-primary hover:text-content-primary dark:hover:text-content-primary':
+                    !archiveAutoUpdateEnabled,
+                }"
+                @click="archiveAutoUpdateEnabled = !archiveAutoUpdateEnabled"
+              >
+                {{ archiveAutoUpdateEnabled ? 'Auto Update: On' : 'Auto Update: Off' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="common-filter-controls"
+          :class="{ 'archive-common-filter-controls': props.mode === 'archive' }"
+        >
         <!-- Type Filter -->
         <div class="flex flex-col">
           <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Type</label>
@@ -773,22 +1158,36 @@ onBeforeUnmount(() => {
             class="glass-card border border-stroke-subtle dark:border-stroke rounded-[10px] px-3 py-2 text-content-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium transition-all duration-200 min-w-[120px] cursor-pointer hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy"
           >
             <option
-              v-for="route in routeTypes"
-              :key="route"
-              :value="route"
+              v-for="route in routeOptions"
+              :key="route.value"
+              :value="route.value"
               class="bg-surface dark:bg-surface-elevated text-content-primary"
             >
-              {{
-                route === 'all'
-                  ? 'All Routes'
-                  : `Route ${route} (${getRouteTypeName(parseInt(route))})`
-              }}
+              {{ route.label }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Drop Reason Filter -->
+        <div v-if="props.mode === 'archive'" class="flex flex-col">
+          <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Drop</label>
+          <select
+            v-model="selectedDropReason"
+            class="glass-card border border-stroke-subtle dark:border-stroke rounded-[10px] px-3 py-2 text-content-primary text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium transition-all duration-200 min-w-[170px] cursor-pointer hover:border-primary/opacity-heavy dark:hover:border-primary/opacity-heavy"
+          >
+            <option
+              v-for="option in dropReasonOptions"
+              :key="option.value"
+              :value="option.value"
+              class="bg-surface dark:bg-surface-elevated text-content-primary"
+            >
+              {{ option.label }}
             </option>
           </select>
         </div>
 
         <!-- New Packets Filter Button -->
-        <div class="flex flex-col">
+        <div v-if="props.mode !== 'archive'" class="flex flex-col">
           <label class="text-content-secondary dark:text-content-muted text-xs mb-1">Filter</label>
           <button
             @click="toggleNewPacketsFilter"
@@ -804,21 +1203,22 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Reset Button -->
-        <div class="flex flex-col reset-container">
+        <div class="flex flex-col reset-container" :class="{ 'archive-reset-container': props.mode === 'archive' }">
           <label class="text-transparent text-xs mb-1">.</label>
           <button
             @click="resetFilters"
             class="glass-card border border-stroke-subtle dark:border-stroke hover:border-primary dark:hover:border-primary rounded-[10px] px-4 py-2 text-content-secondary dark:text-content-muted hover:text-content-primary dark:hover:text-content-primary text-sm transition-all duration-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/opacity-medium"
-            :disabled="selectedType === 'all' && selectedRoute === 'all' && !showOnlyNewPackets"
+            :disabled="selectedType === 'all' && selectedRoute === 'all' && (props.mode !== 'archive' || selectedDropReason === 'all') && !showOnlyNewPackets"
             :class="{
               'opacity-50 cursor-not-allowed hover:border-stroke-subtle dark:hover:border-stroke hover:text-content-secondary dark:hover:text-content-muted':
-                selectedType === 'all' && selectedRoute === 'all' && !showOnlyNewPackets,
+                selectedType === 'all' && selectedRoute === 'all' && (props.mode !== 'archive' || selectedDropReason === 'all') && !showOnlyNewPackets,
               'hover:bg-primary/opacity-light':
-                selectedType !== 'all' || selectedRoute !== 'all' || showOnlyNewPackets,
+                selectedType !== 'all' || selectedRoute !== 'all' || (props.mode === 'archive' && selectedDropReason !== 'all') || showOnlyNewPackets,
             }"
           >
             Reset
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -893,10 +1293,11 @@ onBeforeUnmount(() => {
                   }}</span>
                   <span
                     v-if="packet.type === 4 && getAdvertNodeName(packet)"
-                    class="text-accent-red/opacity-heavy text-[10px] font-medium max-w-[80px] truncate"
+                    class="inline-flex items-start gap-1 px-2 py-1 rounded-md bg-accent-red/opacity-light text-content-primary dark:text-content-primary border border-accent-red/opacity-heavy text-[10px] font-semibold whitespace-normal break-words leading-tight"
                     :title="getAdvertNodeName(packet) || undefined"
                   >
-                    {{ getAdvertNodeName(packet) }}
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-accent-red mt-1 shrink-0"></span>
+                    <span class="whitespace-normal break-words">{{ getAdvertNodeName(packet) }}</span>
                   </span>
                 </div>
               </div>
@@ -985,8 +1386,7 @@ onBeforeUnmount(() => {
                         ></path>
                       </svg>
                       {{ duplicateGroupExpanded(packet) ? 'Hide' : 'Show' }}
-                      {{ duplicateCount(packet) }}
-                      duplicate{{ duplicateCount(packet) === 1 ? '' : 's' }}
+                      details
                     </button>
                   </div>
                   <div
@@ -995,6 +1395,11 @@ onBeforeUnmount(() => {
                   >
                     Duplicate #{{ getPacketMeta(packet)?.duplicateIndex }}
                   </div>
+                  <p class="mt-1 text-[10px] text-content-secondary dark:text-content-muted font-mono">
+                    RX {{ formatRadioId(packet.rx_radio_id) }}
+                    <span class="mx-1">•</span>
+                    TX {{ packet.transmitted ? formatRadioId(packet.tx_radio_id) : '-' }}
+                  </p>
                   <p v-if="packet.drop_reason" class="text-accent-red text-[8px] italic truncate">
                     {{ packet.drop_reason }}
                   </p>
@@ -1101,10 +1506,11 @@ onBeforeUnmount(() => {
                     </span>
                     <span
                       v-if="packet.type === 4 && getAdvertNodeName(packet)"
-                      class="block text-accent-red/opacity-heavy text-[10px] font-medium leading-tight mt-0.5"
+                      class="inline-flex items-start gap-1 px-2 py-1 rounded-md bg-accent-red/opacity-light text-content-primary dark:text-content-primary border border-accent-red/opacity-heavy text-[10px] font-semibold whitespace-normal break-words leading-tight mt-1"
                       :title="getAdvertNodeName(packet) || undefined"
                     >
-                      {{ getAdvertNodeName(packet) }}
+                      <span class="inline-block w-1.5 h-1.5 rounded-full bg-accent-red mt-1 shrink-0"></span>
+                      <span class="whitespace-normal break-words">{{ getAdvertNodeName(packet) }}</span>
                     </span>
                   </div>
                 </div>
@@ -1291,6 +1697,11 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Drop reason (if any) -->
+              <div class="text-content-secondary dark:text-content-muted text-xs font-mono">
+                RX {{ formatRadioId(packet.rx_radio_id) }}
+                <span class="mx-1">•</span>
+                TX {{ packet.transmitted ? formatRadioId(packet.tx_radio_id) : '-' }}
+              </div>
               <div v-if="packet.drop_reason" class="text-accent-red text-xs italic">
                 {{ packet.drop_reason }}
               </div>
@@ -1626,10 +2037,83 @@ onBeforeUnmount(() => {
   border-left-color: color-mix(in srgb, var(--color-border) 65%, transparent);
 }
 
+.filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.archive-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(320px, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.archive-filter-controls {
+  gap: 0.875rem;
+}
+
+.archive-search-control {
+  min-width: 0;
+}
+
+.archive-search-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.archive-meta-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.archive-range-control {
+  grid-column: 1 / -1;
+}
+
+.archive-range-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.common-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.archive-common-filter-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.common-filter-controls > .flex.flex-col {
+  min-width: 120px;
+}
+
+.common-filter-controls .reset-container {
+  margin-left: auto;
+}
+
+.archive-common-filter-controls .reset-container,
+.archive-common-filter-controls .archive-reset-container {
+  margin-left: 0;
+}
+
+.archive-common-filter-controls .archive-reset-container button {
+  width: 100%;
+}
+
 
 
 @media (max-width: 1023px) {
-  /* Better mobile filter layout - keep filters in a more compact grid */
   .filter-container {
     flex-direction: column;
     gap: 1rem;
@@ -1658,31 +2142,30 @@ onBeforeUnmount(() => {
     align-self: flex-start;
   }
 
-  /* Switch to grid layout only on mobile/tablet */
-  .filter-controls {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-    flex-direction: column; /* Override the flex direction */
+  .archive-controls {
+    grid-template-columns: 1fr;
   }
 
-  .filter-controls .flex.flex-col {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
+  .archive-meta-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .filter-controls .flex.flex-col label {
-    margin-bottom: 0;
-    font-size: 0.75rem;
+  .common-filter-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Reset button spans both columns */
-  .reset-container {
-    grid-column: span 2 !important;
-    display: flex;
-    justify-content: center;
-    margin-top: 0.5rem;
+  .common-filter-controls > .flex.flex-col {
+    min-width: 0;
+  }
+
+  .common-filter-controls .reset-container {
+    grid-column: 1 / -1;
+    margin-left: 0;
+  }
+
+  .common-filter-controls .reset-container button {
+    width: 100%;
   }
 
   /* Mobile pagination improvements */
@@ -1733,14 +2216,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
-  /* Stack filters vertically only on very small screens */
-  .filter-controls {
-    grid-template-columns: 1fr !important;
-    gap: 0.75rem;
+  .archive-meta-controls {
+    grid-template-columns: 1fr;
   }
 
-  .reset-container {
-    grid-column: span 1 !important;
+  .archive-range-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+  }
+
+  .common-filter-controls {
+    grid-template-columns: 1fr;
   }
 
   /* More compact header on small screens */
@@ -1785,6 +2272,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 520px) {
+  .archive-range-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mobile-metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.625rem 0.75rem;

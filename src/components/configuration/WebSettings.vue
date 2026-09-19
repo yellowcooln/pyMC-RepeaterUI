@@ -33,7 +33,7 @@
         <div>
           <h3 class="text-lg font-semibold text-content-primary mb-1">Site Identification</h3>
           <p class="text-sm text-content-secondary dark:text-content-muted">
-            Customise the browser tab title, login page caption and shared-link preview
+            Customise the browser tab title and login page caption
           </p>
         </div>
       </div>
@@ -49,12 +49,11 @@
             maxlength="80"
             placeholder="e.g. Base Station Alpha"
             class="w-full px-3 py-2 rounded-lg bg-background-mute dark:bg-background/40 border border-stroke-subtle dark:border-stroke/opacity-medium text-sm text-content-primary placeholder-content-muted dark:placeholder-content-muted focus:outline-none focus:border-primary/opacity-heavy transition-colors"
-            @change="saveSettings"
+            @change="() => saveSettings()"
             :disabled="saving"
           />
           <p class="text-xs text-content-secondary dark:text-content-muted mt-1.5">
-            Shown in the browser tab, above the login form and in Discord or other link previews.
-            Leave blank to use the repeater node name for previews and the default interface title.
+            Shown in the browser tab and above the login form. Leave blank to use the default title.
           </p>
         </div>
       </div>
@@ -108,46 +107,26 @@
         <div>
           <h3 class="text-lg font-semibold text-content-primary mb-1">Web Frontend</h3>
           <p class="text-sm text-content-secondary dark:text-content-muted">
-            Choose which web interface to use
+            Choose which web interface to use as the primary UI at
+            <code class="text-xs">/</code>. Application UI plugins can also be opened under
+            <code class="text-xs">/plugins/&lt;id&gt;/</code>.
           </p>
         </div>
       </div>
 
       <div class="space-y-4">
-        <!-- Frontend Selection -->
-        <div class="space-y-3">
-          <!-- Default Frontend Option -->
-          <label
-            :class="[
-              'flex items-start space-x-3 p-4 bg-background-mute dark:bg-background/30 rounded-lg border-2 cursor-pointer transition-all',
-              localConfig.use_default_frontend
-                ? 'border-accent-cyan bg-accent-cyan/opacity-light'
-                : 'border-stroke-subtle dark:border-stroke/opacity-light hover:border-accent-cyan/opacity-heavy dark:hover:border-accent-cyan/opacity-heavy',
-            ]"
-          >
-            <input
-              type="radio"
-              name="frontend"
-              :checked="localConfig.use_default_frontend"
-              @change="selectDefaultFrontend"
-              :disabled="saving"
-              class="mt-1 h-4 w-4 text-accent-cyan focus:ring-accent-cyan focus:ring-offset-background"
-            />
-            <div class="flex-1">
-              <div class="text-sm font-medium text-content-primary">Default Frontend</div>
-              <div class="text-xs text-content-secondary dark:text-content-muted mt-1">
-                Built-in Repeater web interface
-              </div>
-              <div class="text-xs text-content-muted/opacity-heavy mt-1 font-mono">Built-in</div>
-            </div>
-          </label>
+        <div v-if="checkingFrontends" class="text-sm text-content-muted">
+          Loading available frontends…
+        </div>
 
-          <!-- openHop Console Option -->
+        <div v-else class="space-y-3">
           <label
+            v-for="frontend in frontends"
+            :key="frontend.id"
             :class="[
               'flex items-start space-x-3 p-4 bg-background-mute dark:bg-background/30 rounded-lg border-2 transition-all',
-              !pymcConsoleExists ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-              !localConfig.use_default_frontend
+              !frontend.available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+              selectedFrontendId === frontend.id
                 ? 'border-accent-cyan bg-accent-cyan/opacity-light'
                 : 'border-stroke-subtle dark:border-stroke/opacity-light hover:border-accent-cyan/opacity-heavy dark:hover:border-accent-cyan/opacity-heavy',
             ]"
@@ -155,56 +134,66 @@
             <input
               type="radio"
               name="frontend"
-              :checked="!localConfig.use_default_frontend"
-              @change="selectPymcConsole"
-              :disabled="saving || !pymcConsoleExists"
+              :checked="selectedFrontendId === frontend.id"
+              :disabled="saving || !frontend.available"
               class="mt-1 h-4 w-4 text-accent-cyan focus:ring-accent-cyan focus:ring-offset-background"
+              @change="selectFrontend(frontend)"
             />
-            <div class="flex-1">
-              <div class="flex items-center justify-between">
-                <div class="text-sm font-medium text-content-primary">openHop Console</div>
-                <span
-                  class="text-xs bg-accent-amber/opacity-light text-accent-amber px-2 py-0.5 rounded-full border border-accent-amber/opacity-medium font-medium"
-                  >@Treehouse⚡</span
-                >
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-sm font-medium text-content-primary">
+                  {{ frontend.name }}
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span
+                    v-if="frontend.version"
+                    class="text-xs font-mono bg-background/50 text-content-secondary dark:text-content-muted px-2 py-0.5 rounded-full border border-stroke-subtle"
+                  >
+                    v{{ frontend.version }}
+                  </span>
+                  <span
+                    v-if="frontend.kind === 'console'"
+                    class="text-xs bg-accent-amber/opacity-light text-accent-amber px-2 py-0.5 rounded-full border border-accent-amber/opacity-medium font-medium"
+                    >@Treehouse⚡</span
+                  >
+                  <span
+                    v-else-if="frontend.kind === 'plugin'"
+                    class="text-xs bg-primary/opacity-light text-primary px-2 py-0.5 rounded-full border border-primary/opacity-medium font-medium"
+                    >Plugin</span
+                  >
+                </div>
               </div>
               <div class="text-xs text-content-secondary dark:text-content-muted mt-1">
-                Alternative web interface for Repeater
+                {{ frontend.description }}
               </div>
-              <div class="text-xs text-content-muted/opacity-heavy mt-1 font-mono">
-                /opt/pymc_console/web/html
+              <div class="text-xs text-content-muted/opacity-heavy mt-1 font-mono break-all">
+                {{ frontend.pathLabel }}
+              </div>
+              <div
+                v-if="frontend.kind === 'plugin' && !frontend.enabled"
+                class="text-xs text-accent-amber mt-1"
+              >
+                Enable this plugin under System → Plugins before selecting it as the primary UI.
+              </div>
+              <div
+                v-else-if="frontend.kind === 'console' && !frontend.available"
+                class="text-xs text-accent-cyan mt-1"
+              >
+                Install openHop Console to
+                <code>/opt/pymc_console/web/html</code>
+                before selecting this option.
               </div>
             </div>
           </label>
         </div>
 
-        <!-- openHop Console Status/Installation Info -->
+        <!-- openHop Console install help when missing -->
         <div
-          v-if="!checkingConsole"
-          class="p-4 rounded-lg border"
-          :class="
-            pymcConsoleExists
-              ? 'bg-accent-green/opacity-light border-accent-green/opacity-medium'
-              : 'bg-accent-cyan/opacity-light border-accent-cyan/opacity-medium'
-          "
+          v-if="!checkingFrontends && consoleMissing"
+          class="p-4 rounded-lg border bg-accent-cyan/opacity-light border-accent-cyan/opacity-medium"
         >
           <div class="flex items-start gap-3">
             <svg
-              v-if="pymcConsoleExists"
-              class="w-5 h-5 text-accent-green flex-shrink-0 mt-0.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <svg
-              v-else
               class="w-5 h-5 text-accent-cyan flex-shrink-0 mt-0.5"
               fill="none"
               viewBox="0 0 24 24"
@@ -219,36 +208,22 @@
             </svg>
             <div class="flex-1">
               <h4 class="text-sm font-medium text-content-primary">
-                {{
-                  pymcConsoleExists
-                    ? 'openHop Console has been detected'
-                    : 'openHop Console Not Installed'
-                }}
+                openHop Console Not Installed
               </h4>
-              <p v-if="pymcConsoleExists" class="text-xs text-accent-green mt-1">
-                openHop Console is installed at
-                <code class="text-accent-green">/opt/pymc_console/web/html</code>
+              <p class="text-xs text-content-secondary dark:text-content-muted mt-1 mb-3">
+                openHop Console must be installed at
+                <code class="text-accent-cyan">/opt/pymc_console/web/html</code>
+                before selecting it as the primary frontend. UI plugins appear above once installed
+                and enabled.
               </p>
-              <template v-else>
-                <p class="text-xs text-content-secondary dark:text-content-muted mt-1 mb-3">
-                  openHop Console must be installed at
-                  <code class="text-accent-cyan">/opt/pymc_console/web/html</code> before selecting
-                  this option.
-                </p>
-                <a
-                  href="https://github.com/dmduran12/pymc_console-dist"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-2 px-4 py-2 bg-accent-cyan/opacity-medium hover:bg-accent-cyan/opacity-medium border border-accent-cyan/opacity-heavy text-accent-cyan rounded-lg text-sm font-medium transition-colors"
-                >
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-                    />
-                  </svg>
-                  openHop Console Install Instructions
-                </a>
-              </template>
+              <a
+                href="https://github.com/dmduran12/pymc_console-dist"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-accent-cyan/opacity-medium hover:bg-accent-cyan/opacity-medium border border-accent-cyan/opacity-heavy text-accent-cyan rounded-lg text-sm font-medium transition-colors"
+              >
+                openHop Console Install Instructions
+              </a>
             </div>
           </div>
         </div>
@@ -304,21 +279,21 @@ defineOptions({ name: 'WebSettings' });
 
 interface WebConfig {
   cors_enabled: boolean;
-  use_default_frontend: boolean;
   site_name: string;
 }
 
-interface StoredWebConfig {
-  cors_enabled?: boolean;
-  web_path?: string | null;
-}
-
-interface WebConfigUpdate {
-  web: {
-    cors_enabled: boolean;
-    site_name: string;
-    web_path?: string | null;
-  };
+interface WebFrontend {
+  id: string;
+  kind: 'builtin' | 'console' | 'plugin' | 'custom' | string;
+  name: string;
+  description?: string;
+  path?: string | null;
+  version?: string | null;
+  available?: boolean;
+  enabled?: boolean;
+  selected?: boolean;
+  plugin_id?: string;
+  pathLabel: string;
 }
 
 const { stats } = storeToRefs(useSystemStore());
@@ -326,13 +301,13 @@ const { stats } = storeToRefs(useSystemStore());
 const saving = ref(false);
 const saveMessage = ref('');
 const saveSuccess = ref(false);
-const pymcConsoleExists = ref(false);
-const checkingConsole = ref(true);
 const showSwitchingPopup = ref(false);
+const checkingFrontends = ref(true);
+const frontends = ref<WebFrontend[]>([]);
+const selectedFrontendId = ref('builtin');
 
 const localConfig = reactive<WebConfig>({
   cors_enabled: false,
-  use_default_frontend: true,
   site_name: '',
 });
 
@@ -342,54 +317,133 @@ const saveMessageClass = computed(() => {
     : 'bg-accent-red/opacity-light border-accent-red/opacity-medium';
 });
 
-async function checkPymcConsole() {
+const consoleMissing = computed(() => {
+  const console = frontends.value.find((f) => f.kind === 'console');
+  return !console || !console.available;
+});
+
+function pathLabelFor(item: { kind?: string; path?: string | null; plugin_id?: string }): string {
+  if (item.kind === 'builtin' || !item.path) return 'Built-in';
+  if (item.kind === 'plugin' && item.plugin_id) {
+    return `${item.path}  ·  /plugins/${item.plugin_id}/`;
+  }
+  return item.path;
+}
+
+async function loadFrontends() {
+  checkingFrontends.value = true;
   try {
-    checkingConsole.value = true;
-    const response = await ApiService.get('/check_pymc_console');
-    if (response.success && response.data) {
-      pymcConsoleExists.value = (response.data as { exists: boolean }).exists;
-    }
+    const response = await ApiService.get('/web_frontends');
+    const data = (response.data || response) as {
+      frontends?: Array<Record<string, unknown>>;
+      selected_id?: string;
+    };
+    // ApiService.get may return { success, data } or flattened shapes
+    const payload =
+      response && typeof response === 'object' && 'data' in (response as object)
+        ? ((response as { data?: Record<string, unknown> }).data as
+            | {
+                frontends?: Array<Record<string, unknown>>;
+                selected_id?: string;
+              }
+            | undefined)
+        : (response as {
+            frontends?: Array<Record<string, unknown>>;
+            selected_id?: string;
+          });
+
+    const list = Array.isArray(payload?.frontends)
+      ? payload!.frontends!
+      : Array.isArray(data.frontends)
+        ? data.frontends
+        : [];
+
+    frontends.value = list.map((raw) => {
+      const kind = String(raw.kind || 'custom');
+      const path = (raw.path as string | null | undefined) ?? null;
+      const plugin_id = raw.plugin_id ? String(raw.plugin_id) : undefined;
+      return {
+        id: String(raw.id || kind),
+        kind,
+        name: String(raw.name || raw.id || 'Frontend'),
+        description: raw.description ? String(raw.description) : '',
+        path,
+        version: raw.version ? String(raw.version) : null,
+        available: raw.available !== false,
+        enabled: raw.enabled !== false,
+        selected: !!raw.selected,
+        plugin_id,
+        pathLabel: pathLabelFor({ kind, path, plugin_id }),
+      };
+    });
+
+    const selected =
+      (typeof payload?.selected_id === 'string' && payload.selected_id) ||
+      frontends.value.find((f) => f.selected)?.id ||
+      'builtin';
+    selectedFrontendId.value = selected;
   } catch (error) {
-    console.error('Failed to check openHop Console:', error);
-    pymcConsoleExists.value = false;
+    console.error('Failed to load web frontends:', error);
+    // Fallback: keep builtin only
+    frontends.value = [
+      {
+        id: 'builtin',
+        kind: 'builtin',
+        name: 'Default Frontend',
+        description: 'Built-in Repeater web interface',
+        path: null,
+        version: typeof stats.value?.version === 'string' ? stats.value.version : null,
+        available: true,
+        enabled: true,
+        pathLabel: 'Built-in',
+      },
+    ];
+    selectedFrontendId.value = 'builtin';
   } finally {
-    checkingConsole.value = false;
+    checkingFrontends.value = false;
   }
 }
 
 function loadSettings() {
-  const config = stats.value?.config as { web?: StoredWebConfig } | undefined;
-  const webConfig = config?.web || {};
+  const webConfig = stats.value?.config?.web || {};
   localConfig.cors_enabled = webConfig.cors_enabled === true;
-  const webPath = webConfig.web_path;
-  localConfig.use_default_frontend = !webPath || webPath === '';
   localConfig.site_name = typeof stats.value?.site_name === 'string' ? stats.value.site_name : '';
 }
 
-async function saveSettings() {
+async function saveSettings(options?: { frontendId?: string }) {
   saving.value = true;
   saveMessage.value = '';
 
   try {
-    const updates: WebConfigUpdate = {
+    const frontendId = options?.frontendId ?? selectedFrontendId.value;
+    const frontend = frontends.value.find((f) => f.id === frontendId);
+
+    const updates: {
+      web: {
+        cors_enabled: boolean;
+        site_name: string;
+        web_path?: string | null;
+      };
+    } = {
       web: {
         cors_enabled: localConfig.cors_enabled,
         site_name: localConfig.site_name.trim(),
       },
     };
 
-    // Set web_path based on selection
-    if (localConfig.use_default_frontend) {
-      // null means use default built-in frontend
+    if (!frontend || frontend.kind === 'builtin' || frontend.id === 'builtin') {
       updates.web.web_path = null;
+    } else if (frontend.path) {
+      updates.web.web_path = frontend.path;
     } else {
-      // Use pymc_console path
-      updates.web.web_path = '/opt/pymc_console/web/html';
+      showMessage('Selected frontend has no install path', false);
+      return;
     }
 
     const response = await ApiService.post('/update_web_config', updates);
 
     if (response.success) {
+      selectedFrontendId.value = frontendId;
       const payload = (response.data || {}) as {
         restart_required?: boolean;
         frontend_switched?: boolean;
@@ -397,12 +451,16 @@ async function saveSettings() {
       };
       showMessage(response.message || 'Settings saved successfully', true);
       if (payload.frontend_switched || payload.live_applied) {
-        showSwitchingPopup.value = true;
-        showMessage('Changing interface and refreshing page…', true);
-        setTimeout(() => {
-          window.location.reload();
-        }, 1200);
+        // Only full-page switch popup when the primary frontend path changed
+        if (payload.frontend_switched) {
+          showSwitchingPopup.value = true;
+          showMessage('Changing interface and refreshing page…', true);
+          setTimeout(() => {
+            window.location.reload();
+          }, 1200);
+        }
       }
+      await loadFrontends();
     } else {
       showMessage(response.error || 'Failed to save settings', false);
     }
@@ -419,19 +477,19 @@ async function toggleCors() {
   await saveSettings();
 }
 
-async function selectDefaultFrontend() {
-  localConfig.use_default_frontend = true;
-  await saveSettings();
-}
-
-async function selectPymcConsole() {
-  // Guard: Prevent switching to openHop Console if it's not installed
-  if (!pymcConsoleExists.value) {
-    showMessage('openHop Console is not installed. Please install it before switching.', false);
+async function selectFrontend(frontend: WebFrontend) {
+  if (!frontend.available) {
+    if (frontend.kind === 'plugin' && !frontend.enabled) {
+      showMessage('Enable this plugin under System → Plugins first.', false);
+    } else if (frontend.kind === 'console') {
+      showMessage('openHop Console is not installed. Please install it before switching.', false);
+    } else {
+      showMessage('This frontend is not available.', false);
+    }
     return;
   }
-  localConfig.use_default_frontend = false;
-  await saveSettings();
+  selectedFrontendId.value = frontend.id;
+  await saveSettings({ frontendId: frontend.id });
 }
 
 function showMessage(message: string, success: boolean) {
@@ -444,6 +502,6 @@ function showMessage(message: string, success: boolean) {
 
 onMounted(() => {
   loadSettings();
-  checkPymcConsole();
+  void loadFrontends();
 });
 </script>

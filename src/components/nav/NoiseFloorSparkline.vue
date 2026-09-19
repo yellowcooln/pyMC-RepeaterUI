@@ -14,7 +14,7 @@ watch(
   (dbm) => { if (dbm !== null) packetStore.appendNoiseFloorReading(dbm) },
 )
 
-const currentValue = computed(() => systemStore.noiseFloorDbm || packetStore.currentNoiseFloor)
+const currentValue = computed(() => systemStore.noiseFloorDbm ?? packetStore.currentNoiseFloor)
 
 const sparklineData = computed(() => {
   if (!packetStore.noiseFloorHistory?.length) return []
@@ -30,7 +30,7 @@ const sparklineData = computed(() => {
     <div class="flex items-center justify-between text-[10px] text-content-muted uppercase tracking-wide mb-1">
       <span>Noise Floor</span>
       <span class="text-content-primary normal-case tracking-normal font-medium">
-        {{ currentValue }} dBm
+        {{ currentValue.toFixed(1) }} dBm
       </span>
     </div>
     <InteractiveSparkline :data="sparklineData" unit="dBm" />

@@ -50,4 +50,52 @@ describe('appendNoiseFloorReading', () => {
     expect(ts).toBeGreaterThanOrEqual(before)
     expect(ts).toBeLessThanOrEqual(after)
   })
+
+  it('keeps duplicate packet outcomes separate when they share a packet hash', async () => {
+    const store = await getStore()
+
+    const droppedPacket = {
+      id: 1,
+      timestamp: 1700000000,
+      packet_hash: 'abc123',
+      type: 4,
+      route: 1,
+      src_hash: 'src1',
+      dst_hash: 'dst1',
+      rssi: -90,
+      snr: 8,
+      length: 35,
+      transported: false,
+      transmitted: false,
+      is_duplicate: true,
+      drop_reason: 'duplicate packet',
+      score: 42,
+      tx_delay_ms: 0,
+    }
+
+    const forwardedPacket = {
+      id: 2,
+      timestamp: 1700000001,
+      packet_hash: 'abc123',
+      type: 4,
+      route: 1,
+      src_hash: 'src1',
+      dst_hash: 'dst1',
+      rssi: -88,
+      snr: 9,
+      length: 35,
+      transported: true,
+      transmitted: true,
+      is_duplicate: true,
+      score: 45,
+      tx_delay_ms: 10,
+    }
+
+    store.addRealtimePacket(droppedPacket)
+    store.addRealtimePacket(forwardedPacket)
+
+    expect(store.recentPackets).toHaveLength(2)
+    expect(store.recentPackets.some((packet) => packet.drop_reason === 'duplicate packet')).toBe(true)
+    expect(store.recentPackets.some((packet) => packet.transmitted)).toBe(true)
+  })
 })

@@ -23,16 +23,30 @@ const phase = ref<Phase>(initialPhase());
 let closeTimer: number | null = null;
 
 const show = computed(() => phase.value !== 'closed');
+const hasErrors = computed(() => Object.values(dataService.loadProgress).some((s) => s === 'error'));
+const completedSteps = computed(() =>
+  Object.values(dataService.loadProgress).filter((s) => s === 'done' || s === 'error').length,
+);
+const totalSteps = computed(() => Object.keys(dataService.loadProgress).length);
+const statusTitle = computed(() => {
+  if (phase.value === 'connected') return hasErrors.value ? 'Started with issues' : 'Ready';
+  if (phase.value === 'connecting') return 'Loading data...';
+  return 'Starting up...';
+});
+const statusDetail = computed(() => {
+  if (phase.value === 'connected') {
+    return hasErrors.value
+      ? 'Some startup requests failed. You can keep using the dashboard.'
+      : 'Realtime connection established.';
+  }
 
-const httpSteps = [
-  { key: 'stats',        label: 'System configuration' },
-  { key: 'packetStats',  label: 'Packet statistics' },
-  { key: 'noiseFloor',   label: 'Signal history' },
-  { key: 'recentPackets', label: 'Recent activity' },
-  { key: 'sparklines',   label: 'Performance charts' },
-  { key: 'advertTier',   label: 'Adaptive rate limits' },
-  { key: 'neighbors',    label: 'Mesh neighbours' },
-] as const;
+  if (phase.value === 'connecting') {
+    return 'Opening realtime connection...';
+  }
+
+  const progress = `${completedSteps.value}/${totalSteps.value}`;
+  return `Loading data ${progress}`;
+});
 
 // Move to 'connecting' when DataService bootstrap finishes.
 // If WS already opened during bootstrap, skip straight to 'connected'.
@@ -44,7 +58,7 @@ watch(
         phase.value = 'connected';
         closeTimer = window.setTimeout(() => {
           phase.value = 'closed';
-        }, 2000);
+        }, 2200);
       } else {
         phase.value = 'connecting';
       }
@@ -61,7 +75,7 @@ watch(
       phase.value = 'connected';
       closeTimer = window.setTimeout(() => {
         phase.value = 'closed';
-      }, 2000);
+      }, 2200);
     }
   },
 );
@@ -74,115 +88,70 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition
-      enter-active-class="transition-opacity duration-300"
-      enter-from-class="opacity-0"
-      leave-active-class="transition-opacity duration-500"
-      leave-to-class="opacity-0"
+      enter-active-class="transition duration-250 ease-out"
+      enter-from-class="opacity-0 translate-y-2"
+      leave-active-class="transition duration-500 ease-in"
+      leave-to-class="opacity-0 translate-y-2"
     >
       <div
         v-if="show"
-        class="modal-backdrop z-[500]!"
+        class="pointer-events-none fixed z-[500] right-2 bottom-[calc(var(--app-safe-area-bottom)+5.5rem)] sm:right-4 sm:bottom-[calc(var(--app-safe-area-bottom)+1rem)]"
       >
-        <div class="modal-card max-w-sm w-full">
-          <!-- Header -->
-          <div class="mb-6 text-center">
-            <h2 class="text-lg font-semibold text-content-primary">
-              Starting up
-            </h2>
-            <p class="text-xs text-content-secondary dark:text-content-muted mt-1">
-              Loading data before opening the live connection
-            </p>
-          </div>
-
-          <!-- HTTP steps -->
-          <ul class="space-y-2.5 mb-5">
-            <li
-              v-for="step in httpSteps"
-              :key="step.key"
-              class="flex items-center gap-3"
-            >
-              <!-- Status icon -->
-              <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                <Spinner v-if="dataService.loadProgress[step.key] === 'loading'" size="sm" />
-                <svg
-                  v-else-if="dataService.loadProgress[step.key] === 'done'"
-                  class="w-4 h-4 text-accent-green"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-                <svg
-                  v-else-if="dataService.loadProgress[step.key] === 'error'"
-                  class="w-4 h-4 text-accent-red"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span v-else class="w-3 h-3 rounded-full border border-stroke-subtle dark:border-white/opacity-medium" />
-              </span>
-
-              <!-- Label -->
-              <span
-                :class="[
-                  'text-sm transition-colors flex items-baseline gap-2',
-                  dataService.loadProgress[step.key] === 'done'
-                    ? 'text-content-primary'
-                    : dataService.loadProgress[step.key] === 'loading'
-                      ? 'text-content-primary font-medium'
-                      : dataService.loadProgress[step.key] === 'error'
-                        ? 'text-accent-red'
-                        : 'text-content-muted/opacity-heavy',
-                ]"
-              >
-                {{ step.label }}
-                <span
-                  v-if="step.key === 'stats' && dataService.statsSubStatus !== null"
-                  class="text-xs font-normal text-content-muted/opacity-heavy"
-                >
-                  {{ dataService.statsSubStatus === 'reading' ? 'Receiving data' : 'Requesting' }}
-                </span>
-              </span>
-            </li>
-          </ul>
-
-          <!-- Divider -->
-          <div class="border-t border-stroke-subtle dark:border-white/opacity-light mb-5" />
-
-          <!-- WebSocket step -->
-          <div class="flex items-center gap-3">
-            <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-              <Spinner v-if="phase === 'connecting'" size="sm" />
+        <div
+          class="pointer-events-auto w-[min(20rem,calc(100vw-1rem))] sm:w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border shadow-lg backdrop-blur-sm px-3 py-2.5 sm:px-3.5 sm:py-3 transition-colors"
+          :class="[
+            phase === 'connected' && hasErrors
+              ? 'bg-black/90 border-warning/50 text-white'
+              : phase === 'connected'
+                ? 'bg-black/90 border-accent-green/50 text-white'
+                : 'bg-black/85 border-white/20 text-white',
+          ]"
+        >
+          <div class="flex items-start gap-2.5">
+            <div class="mt-0.5 flex-shrink-0">
+              <Spinner
+                v-if="phase === 'loading' || phase === 'connecting'"
+                size="sm"
+                color="current"
+              />
               <svg
-                v-else-if="phase === 'connected'"
-                class="w-4 h-4 text-accent-green"
+                v-else-if="phase === 'connected' && !hasErrors"
+                class="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
               </svg>
-              <span v-else class="w-3 h-3 rounded-full border border-stroke-subtle dark:border-white/opacity-medium" />
-            </span>
-            <span
-              :class="[
-                'text-sm transition-colors',
-                phase === 'connected'
-                  ? 'text-accent-green font-medium'
-                  : phase === 'connecting'
-                    ? 'text-content-primary font-medium'
-                    : 'text-content-muted/opacity-heavy',
-              ]"
-            >
-              {{
-                phase === 'connected'
-                  ? 'Real-time connection established'
-                  : 'Opening real-time data connection...'
-              }}
-            </span>
+              <svg
+                v-else
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z" />
+              </svg>
+            </div>
+
+            <div class="min-w-0">
+              <p class="text-sm font-semibold leading-5">
+                {{ statusTitle }}
+              </p>
+              <p
+                class="mt-0.5 text-xs leading-4"
+                :class="phase === 'connected' ? 'text-white/85' : 'text-white/80'"
+              >
+                {{ statusDetail }}
+              </p>
+
+              <p
+                v-if="phase !== 'connected' && hasErrors"
+                class="mt-1 text-[11px] leading-4 text-warning"
+              >
+                Some requests failed. Startup will continue.
+              </p>
+            </div>
           </div>
         </div>
       </div>

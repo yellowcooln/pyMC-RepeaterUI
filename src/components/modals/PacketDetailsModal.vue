@@ -20,6 +20,8 @@ interface Packet {
   snr: number | null;
   score: number | null;
   tx_delay_ms: number;
+  rx_radio_id?: string | null;
+  tx_radio_id?: string | null;
   src_hash: string;
   dst_hash: string;
   payload?: string;
@@ -143,7 +145,9 @@ const refreshContactLookup = async () => {
   contactLookupLoading.value = true;
   try {
     const [contactsResponse, advertResponses] = await Promise.all([
-      ApiService.get('/companion/contacts'),
+      // A repeater with no companion bridge returns 503 here; treat it like the
+      // advert lookups below so advert-based names still resolve.
+      ApiService.get('/companion/contacts').catch(() => null),
       Promise.all(
         ADVERT_CONTACT_TYPES.map((contactType) =>
           ApiService.get('/adverts_by_contact_type', {
@@ -364,6 +368,16 @@ const collectPacketDifferences = (base: Packet, duplicate: Packet): PacketDiffer
     'TX Delay',
     formatComparableValue(base.tx_delay_ms, ' ms', 1),
     formatComparableValue(duplicate.tx_delay_ms, ' ms', 1),
+  );
+  addDifference(
+    'RX Radio',
+    formatComparableValue(base.rx_radio_id || 'N/A'),
+    formatComparableValue(duplicate.rx_radio_id || 'N/A'),
+  );
+  addDifference(
+    'TX Radio',
+    formatComparableValue(base.tx_radio_id || 'N/A'),
+    formatComparableValue(duplicate.tx_radio_id || 'N/A'),
   );
   addDifference('Source', formatComparableValue(base.src_hash), formatComparableValue(duplicate.src_hash));
   addDifference(
@@ -2417,8 +2431,28 @@ watch(
                           {{ packet.transmitted ? 'Yes' : 'No' }}
                         </span>
                       </div>
+                      <div
+                        class="flex justify-between py-2 border-b border-stroke-subtle dark:border-stroke/opacity-light"
+                      >
+                        <span class="text-content-secondary dark:text-content-muted text-sm"
+                          >RX Radio</span
+                        >
+                        <span class="text-content-primary font-mono text-xs">
+                          {{ packet.rx_radio_id || 'N/A' }}
+                        </span>
+                      </div>
                     </div>
                     <div class="space-y-2">
+                      <div
+                        class="flex justify-between py-2 border-b border-stroke-subtle dark:border-stroke/opacity-light"
+                      >
+                        <span class="text-content-secondary dark:text-content-muted text-sm"
+                          >TX Radio</span
+                        >
+                        <span class="text-content-primary font-mono text-xs">
+                          {{ packet.transmitted ? (packet.tx_radio_id || 'N/A') : '-' }}
+                        </span>
+                      </div>
                       <div
                         class="flex justify-between py-2 border-b border-stroke-subtle dark:border-stroke/opacity-light"
                       >

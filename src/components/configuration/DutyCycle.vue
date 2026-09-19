@@ -11,12 +11,7 @@ const dutyCycleConfig = computed(() => systemStore.stats?.config?.duty_cycle || 
 
 const maxAirtimePercent = computed(() => {
   const maxAirtime = dutyCycleConfig.value.max_airtime_percent;
-  if (typeof maxAirtime === 'number') {
-    return maxAirtime.toFixed(1) + '%';
-  } else if (maxAirtime && typeof maxAirtime === 'object' && 'parsedValue' in maxAirtime) {
-    return (maxAirtime.parsedValue || 0).toFixed(1) + '%';
-  }
-  return 'Not set';
+  return typeof maxAirtime === 'number' ? maxAirtime.toFixed(1) + '%' : 'Not set';
 });
 
 const enforcement = computed(() => {
@@ -36,13 +31,7 @@ const enforcementInput = ref(true);
 const startEditing = () => {
   // Parse current values
   const maxAirtime = dutyCycleConfig.value.max_airtime_percent;
-  if (typeof maxAirtime === 'number') {
-    maxAirtimeInput.value = maxAirtime;
-  } else if (maxAirtime && typeof maxAirtime === 'object' && 'parsedValue' in maxAirtime) {
-    maxAirtimeInput.value = maxAirtime.parsedValue || 0;
-  } else {
-    maxAirtimeInput.value = 6.0;
-  }
+  maxAirtimeInput.value = typeof maxAirtime === 'number' ? maxAirtime : 6.0;
 
   enforcementInput.value = dutyCycleConfig.value.enforcement_enabled !== false;
   isEditing.value = true;

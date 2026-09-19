@@ -24,15 +24,17 @@ defineOptions({ name: 'HelpView' });
         </div>
 
         <h2 class="text-content-primary text-ui-section sm:text-ui-title font-medium mb-3">
-          Repeater Wiki
+          Repeater Documentation
         </h2>
-        <p class="text-content-secondary dark:text-content-muted text-ui-label sm:text-ui-body mb-8 max-w-md mx-auto">
-          Access documentation, setup guides, troubleshooting tips, and community resources on our
-          official wiki.
+        <p
+          class="text-content-secondary dark:text-content-muted text-ui-label sm:text-ui-body mb-8 max-w-md mx-auto"
+        >
+          Access setup guides, configuration references, troubleshooting, and hardware documentation
+          on the official openHop documentation site.
         </p>
 
         <a
-          href="https://github.com/openhop-dev/openhop_repeater/wiki"
+          href="https://docs.openhop.dev/projects/openhop-repeater/"
           target="_blank"
           rel="noopener noreferrer"
           class="inline-flex items-center gap-2 font-medium py-3 px-6 rounded-xl transition-colors bg-primary/opacity-medium hover:bg-primary/opacity-medium border border-primary/opacity-heavy text-primary"
@@ -45,12 +47,10 @@ defineOptions({ name: 'HelpView' });
               d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
             />
           </svg>
-          Visit Wiki Documentation
+          Visit Documentation
         </a>
 
-        <div class="mt-8 text-xs text-content-muted">
-          Opens in a new tab
-        </div>
+        <div class="mt-8 text-xs text-content-muted">Opens in a new tab</div>
       </div>
     </div>
   </div>

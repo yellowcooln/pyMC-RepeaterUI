@@ -33,6 +33,8 @@ export interface RecentPacket {
   drop_reason?: string;
   score: number;
   tx_delay_ms: number;
+  rx_radio_id?: string;
+  tx_radio_id?: string;
   lbt_attempts?: number;
   lbt_backoff_delays_ms?: string;
   lbt_channel_busy?: boolean;
@@ -178,17 +180,43 @@ export interface SystemStats {
   radio_error?: string;
   last_packet_time?: number;
   noise_floor_dbm?: number;
-  utilization_percent?: number | { source?: string; parsedValue?: number };
+  utilization_percent?: number;
+  /** Carried by the WS vitals broadcast; over HTTP the mode lives in config. */
+  mode?: 'forward' | 'monitor' | 'no_tx';
+  advert_tier?: {
+    current_tier?: string;
+    adverts_allowed?: number;
+    adverts_dropped?: number;
+    active_penalties?: number;
+  };
   duplicate_cache_size?: number;
   cache_ttl?: number;
   config?: {
     node_name?: string;
     radio_type?: string;
+    radios?: Array<Record<string, unknown>>;
+    fabric?: {
+      default_radio?: string;
+      default_radio_id?: string;
+      tx_mode?: string;
+      use_fabric?: boolean;
+    };
+    radio_stack?: Record<string, unknown>;
+    sx1262?: Record<string, unknown>;
+    ch341?: Record<string, unknown>;
+    kiss?: Record<string, unknown>;
+    modem_usb?: Record<string, unknown>;
+    modem_tcp?: Record<string, unknown>;
+    /** Compatibility aliases returned by older backends. */
+    pymc_usb?: Record<string, unknown>;
+    pymc_tcp?: Record<string, unknown>;
     repeater?: {
       mode?: 'forward' | 'monitor' | 'no_tx';
       use_score_for_tx?: boolean;
       score_threshold?: number;
       send_advert_interval_hours?: number;
+      direct_advert_interval_hours?: number;
+      advert_interval_minutes?: number;
       latitude?: number;
       longitude?: number;
       advert_rate_limit?: {
@@ -227,10 +255,10 @@ export interface SystemStats {
     };
     duty_cycle?: {
       enforcement_enabled?: boolean;
-      max_airtime_percent?: number | { source?: string; parsedValue?: number };
+      max_airtime_percent?: number;
     };
     delays?: {
-      tx_delay_factor?: { source?: string; parsedValue?: number };
+      tx_delay_factor?: number;
       direct_tx_delay_factor?: number;
     };
     mesh?: {
@@ -243,6 +271,11 @@ export interface SystemStats {
       poll_interval_seconds?: number;
       auto_install_packages?: boolean;
       definitions?: Array<Record<string, unknown>>;
+    };
+    web?: {
+      cors_enabled?: boolean;
+      web_path?: string | null;
+      site_name?: string;
     };
     mqtt_brokers?: {
       iata_code?: string;
@@ -280,7 +313,7 @@ export interface SystemStats {
         tls?: {
           enabled?: boolean;
           insecure?: boolean;
-        }
+        };
       }>;
     };
   };

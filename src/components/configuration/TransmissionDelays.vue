@@ -10,13 +10,8 @@ const systemStore = useSystemStore();
 const delaysConfig = computed(() => systemStore.stats?.config?.delays || {});
 
 const floodTxDelayFactor = computed(() => {
-  const factor: unknown = delaysConfig.value.tx_delay_factor;
-  if (typeof factor === 'number') return factor.toFixed(2) + 'x';
-  if (factor && typeof factor === 'object' && 'parsedValue' in factor) {
-    const value = (factor as { parsedValue?: number }).parsedValue;
-    if (typeof value === 'number') return value.toFixed(2) + 'x';
-  }
-  return 'Not set';
+  const factor = delaysConfig.value.tx_delay_factor;
+  return typeof factor === 'number' ? factor.toFixed(2) + 'x' : 'Not set';
 });
 
 const directTxDelayFactor = computed(() => {
@@ -36,14 +31,8 @@ const directTxDelayInput = ref(0);
 
 const startEditing = () => {
   // Parse current values
-  const floodFactor: unknown = delaysConfig.value.tx_delay_factor;
-  if (floodFactor && typeof floodFactor === 'object' && 'parsedValue' in floodFactor) {
-    floodTxDelayInput.value = (floodFactor as { parsedValue?: number }).parsedValue || 1.0;
-  } else if (typeof floodFactor === 'number') {
-    floodTxDelayInput.value = floodFactor;
-  } else {
-    floodTxDelayInput.value = 1.0;
-  }
+  const floodFactor = delaysConfig.value.tx_delay_factor;
+  floodTxDelayInput.value = typeof floodFactor === 'number' ? floodFactor : 1.0;
 
   const directFactor: unknown = delaysConfig.value.direct_tx_delay_factor;
   directTxDelayInput.value = typeof directFactor === 'number' ? directFactor : 0.5;

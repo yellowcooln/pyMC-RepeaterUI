@@ -249,6 +249,13 @@ export const useSystemStore = defineStore('system', () => {
   }
 
   function updateControlStatesFromStats(statsData: SystemStats) {
+    // The WS vitals broadcast carries the mode at top level (config only
+    // travels over HTTP) — so a change made over RF or CLI reaches the badge.
+    const liveMode = statsData.mode;
+    if (liveMode === 'forward' || liveMode === 'monitor' || liveMode === 'no_tx') {
+      currentMode.value = liveMode;
+    }
+
     // Extract control states from stats data
     if (statsData.config) {
       // Update mode (normalize unknown to forward per backend)
@@ -264,22 +271,18 @@ export const useSystemStore = defineStore('system', () => {
       if (dutyCycle) {
         dutyCycleEnabled.value = dutyCycle.enforcement_enabled !== false;
 
-        // Handle both number and parsed value format for max_airtime_percent
-        const maxAirtime = dutyCycle.max_airtime_percent;
-        if (typeof maxAirtime === 'number') {
-          dutyCycleMax.value = maxAirtime;
-        } else if (maxAirtime && typeof maxAirtime === 'object' && 'parsedValue' in maxAirtime) {
-          dutyCycleMax.value = maxAirtime.parsedValue || 10;
+        if (typeof dutyCycle.max_airtime_percent === 'number') {
+          dutyCycleMax.value = dutyCycle.max_airtime_percent;
         }
       }
     }
 
-    // Update utilization from stats - handle both number and parsed value format
+    // The backend's utilization_percent is the share of the ALLOWED BUDGET
+    // consumed over its sliding minute (100 = budget exhausted), not a share
+    // of airtime: convert so it lives in the same unit as dutyCycleMax.
     const utilization = statsData.utilization_percent;
     if (typeof utilization === 'number') {
-      dutyCycleUtilization.value = utilization;
-    } else if (utilization && typeof utilization === 'object' && 'parsedValue' in utilization) {
-      dutyCycleUtilization.value = utilization.parsedValue || 0;
+      dutyCycleUtilization.value = (utilization * dutyCycleMax.value) / 100;
     }
   }
 
@@ -322,12 +325,12 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
-  async function sendAdvert() {
+  async function sendAdvert(mode: 'flood' | 'direct' = 'flood') {
     try {
       // Use a longer timeout for advert sending as it may take longer to broadcast
       const response = await ApiService.post<string>(
         '/send_advert',
-        {},
+        { mode },
         {
           timeout: 10000, // 10 seconds instead of default 5
         },

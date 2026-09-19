@@ -229,6 +229,12 @@ const fieldDefinitions: FieldDefinition[] = [
     operators: ['contains', 'starts_with', 'ends_with', 'equals', 'not_equals'],
   },
   {
+    value: 'channel_sender',
+    label: 'Channel Sender',
+    valueTypes: ['string'],
+    operators: ['contains', 'starts_with', 'ends_with', 'equals', 'not_equals'],
+  },
+  {
     value: 'payload_hex',
     label: 'Payload Hex',
     valueTypes: ['string'],

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, type Ref, type ComponentPublicInstance } from 'vue';
+import { ref, onMounted, watch, type Ref, type ComponentPublicInstance } from 'vue';
 import { useRoute, onBeforeRouteUpdate } from 'vue-router';
 import { useSystemStore } from '@/stores/system';
 import { useDataService } from '@/stores/dataService';
@@ -17,6 +17,7 @@ import BackupRestore from '@/components/configuration/BackupRestore.vue';
 import DatabaseManagement from '@/components/configuration/DatabaseManagement.vue';
 import MemoryDebug from '@/components/configuration/MemoryDebug.vue';
 import PolicyEngineSettings from '@/components/configuration/PolicyEngineSettings.vue';
+import SensorManagerSettings from '@/components/configuration/SensorManagerSettings.vue';
 import { getPreference, setPreference } from '@/utils/preferences';
 import Spinner from '@/components/ui/Spinner.vue';
 
@@ -43,6 +44,8 @@ const dutyRef           = ref<EditableTabRef | null>(null);
 const delaysRef         = ref<EditableTabRef | null>(null);
 const transportRef      = ref<EditableTabRef | null>(null);
 const letsMeshRef       = ref<EditableTabRef | null>(null);
+const policyRef         = ref<EditableTabRef | null>(null);
+const sensorRef         = ref<EditableTabRef | null>(null);
 
 const editableTabRefs: Record<string, Ref<EditableTabRef | null>> = {
   radio:           radioRef,
@@ -53,6 +56,8 @@ const editableTabRefs: Record<string, Ref<EditableTabRef | null>> = {
   delays:          delaysRef,
   transport:       transportRef,
   observer:        letsMeshRef,
+  policy:          policyRef,
+  sensormanager:   sensorRef,
 };
 
 function isCurrentTabEditing(): boolean {
@@ -76,7 +81,7 @@ function requestCurrentTabLeave(callback: () => void) {
 const VALID_TABS = new Set([
   'radio', 'radio-hardware', 'repeater', 'duty', 'delays',
   'advert', 'transport', 'api-tokens', 'web', 'observer', 'policy-engine',
-  'backup', 'database', 'memory',
+  'backup', 'database', 'memory', 'sensormanager',
 ]);
 
 function resolveTab(queryTab: string | undefined): string {
@@ -197,6 +202,7 @@ onMounted(async () => {
         <BackupRestore          v-if="activeTab === 'backup'"                               key="backup-restore" />
         <DatabaseManagement     v-if="activeTab === 'database'"                             key="database-management" />
         <MemoryDebug            v-if="activeTab === 'memory'"                               key="memory-debug" />
+        <SensorManagerSettings  v-if="activeTab === 'sensormanager'"                        key="sensor-manager" />
       </div>
     </div>
   </div>

@@ -624,7 +624,20 @@ function reloadPage() {
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            You are up to date. Use <em class="mx-1">Force Reinstall</em> to reinstall anyway.
+            You are up to date. To reinstall anyway, use the web updater's
+            <em class="mx-1">Force Reinstall</em> button. If the plugin manager doesn't start after
+            any upgrade, rerun the native upgrade helper from the host source checkout that
+            installed the repeater. If that checkout is missing or very old, clone a fresh copy
+            first; otherwise update the checkout and rerun the helper:
+          </div>
+          <pre class="block rounded bg-black/10 px-3 py-2 text-xs leading-5 text-content-primary dark:bg-white/10 whitespace-pre-wrap overflow-x-auto">
+cd openhop_repeater/
+sudo git pull
+git switch dev
+sudo ./manage.sh upgrade
+          </pre>
+          <div class="mt-2 text-xs text-content-secondary dark:text-content-muted">
+            That step installs the missing plugin-manager service unit before enabling it.
           </div>
 
           <!-- What's New / Changelog -->
