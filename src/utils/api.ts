@@ -1,6 +1,9 @@
 import axios from 'axios';
+export { summarizeApiError } from './safeError';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import type { RequestParams } from '@/generated/openapi';
+import type { AuthMethods, OidcExchangeResponse, RequestParams } from '@/generated/openapi';
+
+export type { AuthMethods, OidcExchangeResponse } from '@/generated/openapi';
 import { getToken, isTokenExpired, shouldRefreshToken, setToken, getClientId } from './auth';
 import { useAppRuntimeStore } from '@/stores/appRuntime';
 import type {
@@ -1703,5 +1706,31 @@ export class ApiService {
 }
 
 // Export the axios instance for direct use if needed
+
+export async function fetchAuthMethods(): Promise<AuthMethods> {
+  const response = await authClient.get<AuthMethods>('/auth/methods');
+  const data = response.data;
+
+  return {
+    success: data.success === true,
+    local: data.local === true,
+    oidc: data.oidc === true,
+    oidc_provider_name: data.oidc_provider_name,
+    error: data.error,
+  };
+}
+
+export async function exchangeOidcCode(
+  oidcExchange: string,
+  clientId: string,
+): Promise<OidcExchangeResponse> {
+  const response = await authClient.post<OidcExchangeResponse>('/auth/oidc/exchange', {
+    code: oidcExchange,
+    client_id: clientId,
+  });
+
+  return response.data;
+}
+
 export { apiClient };
 export default ApiService;
