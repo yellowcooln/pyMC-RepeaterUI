@@ -36,7 +36,9 @@ hopfetch --help
 hopfetch --plain
 ```
 
-The snapshot shows available host specs, resource usage, software versions, host/service uptime, radio names and their RF profiles, and sensor names/status. Layout adapts to the terminal width, wrapping at word boundaries and splitting only tokens wider than the available column; `--plain` removes artwork and ANSI colors for copying. Large inventories remain complete and can naturally scroll.
+The snapshot shows available host specs, resource usage, software versions, host/service uptime, radio names and their RF profiles, and sensor names/status. Temperatures are summarized rather than listing every core/drive channel: hottest CPU and drive, with a board or explicitly unclassified fallback where needed. Layout adapts to the terminal width, wrapping at word boundaries and splitting only tokens wider than the available column; `--plain` removes artwork and ANSI colors for copying. Radio/sensor inventories remain complete and can naturally scroll.
+
+TCP modem hardware models come from fresh successful sensor telemetry uniquely associated by device host, not similar names; unmatched, ambiguous, or unhealthy readings do not supply a model. Native SPI/CH341 radios show a hardware preset only when their effective configuration uniquely matches the hardware catalogue; modified configurations with no catalogue match show `Custom`, while overlapping matches show `preset ambiguous`. These are reported/configured identities, not independent physical-device detection.
 
 This is read-only and runs only when requested: it does not start another polling loop, connect directly to a modem, or change the terminal introduction. Hardware details come from the Repeater, not your browser. In Docker, values describe the environment visible to the container and are not guaranteed to represent the whole physical host. Missing optional telemetry is not guessed.
 

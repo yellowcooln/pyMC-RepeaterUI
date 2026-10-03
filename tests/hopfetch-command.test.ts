@@ -5,11 +5,13 @@ import { CommandRegistry } from '@/commands';
 const mocks = vi.hoisted(() => ({
   ensure: vi.fn(),
   get: vi.fn(),
+  apiGet: vi.fn(),
   store: { stats: { config: { node_name: 'Hill' } } as unknown },
 }));
 vi.mock('@/stores/dataService', () => ({ useDataService: () => ({ ensure: mocks.ensure }) }));
 vi.mock('@/stores/system', () => ({ useSystemStore: () => mocks.store }));
 vi.mock('@/utils/streamingFetch', () => ({ streamingGet: mocks.get }));
+vi.mock('@/utils/api', () => ({ ApiService: { get: mocks.apiGet } }));
 const context = (args: string[] = [], signal?: AbortSignal) => ({
   term: { cols: 110, rows: 30, writeln: vi.fn() } as unknown as Terminal,
   args,
@@ -19,6 +21,8 @@ const context = (args: string[] = [], signal?: AbortSignal) => ({
 describe('hopfetch command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.store.stats = { config: { node_name: 'Hill' } };
+    mocks.apiGet.mockResolvedValue({ hardware: [] });
     mocks.ensure.mockResolvedValue(undefined);
     mocks.get.mockResolvedValue({ success: true, data: { system: { os: 'Linux' } } });
   });
@@ -65,6 +69,19 @@ describe('hopfetch command', () => {
       expect(ctx.writePrompt).toHaveBeenCalledTimes(1);
     },
   );
+  it('only fetches the hardware catalogue once for native radios, never sensor config', async () => {
+    mocks.store.stats = { radio_type: 'sx1262' };
+    await new HopfetchCommand().execute(context());
+    expect(mocks.apiGet).toHaveBeenCalledExactlyOnceWith(
+      'hardware_options',
+      undefined,
+      expect.objectContaining({ signal: undefined }),
+    );
+    mocks.apiGet.mockClear();
+    mocks.store.stats = { radio_type: 'modem_tcp' };
+    await new HopfetchCommand().execute(context());
+    expect(mocks.apiGet).not.toHaveBeenCalled();
+  });
   it('cancels without late writes or prompt after terminal disposal', async () => {
     let finish!: () => void;
     mocks.ensure.mockReturnValue(

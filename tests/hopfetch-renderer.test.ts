@@ -78,7 +78,9 @@ describe('hopfetch renderer', () => {
     const lines = renderSnapshot(rows, { cols: 110, rows: 30 });
     expect(lines.length).toBeLessThanOrEqual(30);
     const text = lines.join('');
-    for (const name of Object.keys(temperatures)) expect(text).toContain(name);
+    expect(text).toContain('CPU 40°C · Drive 45°C');
+    expect(text).not.toContain('cpu_package');
+    expect(text).not.toContain('core0');
     for (const sensor of inventory) expect(text).toContain(sensor.name);
     for (const radio of radios) expect(text).toContain(radio.name);
   });

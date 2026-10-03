@@ -48,6 +48,10 @@ export interface SensorInventoryEntry {
   enabled: boolean;
   /** Whether this definition instantiated a sensor, not whether its connection or latest reading is healthy. */
   loaded: boolean;
+  /** Optional loaded modem HTTP hostname only; no scheme, port, userinfo, path or query. Not connectivity evidence. */
+  source_host?: string;
+  /** Optional effective loaded modem polling cadence, independent of the manager default. */
+  poll_interval_seconds?: number;
 }
 
 export interface SensorSummary {
