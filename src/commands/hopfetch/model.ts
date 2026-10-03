@@ -333,77 +333,6 @@ function radioRows(
     ];
   });
 }
-function sensorRows(stats: RecordData, config: RecordData, now: number): SnapshotRow[] {
-  const summary = record(stats.sensors);
-  const section = record(config.sensors);
-  const hasInventory = Array.isArray(summary.inventory);
-  const hasDefinitions = Array.isArray(section.definitions ?? section.sensors);
-  const definitions = list(
-    hasInventory ? summary.inventory : (section.definitions ?? section.sensors),
-  );
-  const readings = list(summary.readings);
-  const used = new Set<RecordData>();
-  const configured =
-    number(summary.configured) ?? (hasInventory || hasDefinitions ? definitions.length : undefined);
-  const inventoryLabel =
-    configured === 0
-      ? 'none configured'
-      : configured !== undefined
-        ? `${configured} configured`
-        : 'configured count unknown';
-  const rows: SnapshotRow[] = [
-    {
-      label: 'Sensors',
-      value:
-        (summary.enabled ?? section.enabled) === false
-          ? 'manager disabled'
-          : !hasInventory && !hasDefinitions && configured !== 0
-            ? `${inventoryLabel === 'configured count unknown' && !readings.length ? 'inventory unknown' : inventoryLabel} · names incomplete (${readings.length} visible)`
-            : inventoryLabel,
-    },
-  ];
-  const entries = definitions.map((def) => {
-    const reading = readings.find((r) => r.name === def.name && !used.has(r));
-    if (reading) used.add(reading);
-    return { def, reading };
-  });
-  for (const reading of readings) if (!used.has(reading)) entries.push({ def: {}, reading });
-  for (const { def, reading } of entries) {
-    const r = reading ?? {};
-    let state = 'unknown';
-    if (
-      (summary.enabled ?? section.enabled) === false ||
-      def.enabled === false ||
-      r.error === 'disabled'
-    )
-      state = 'disabled';
-    else if (r.ok === false) state = 'error';
-    else if (def.loaded === false) state = 'not loaded';
-    else if (!reading) state = def.loaded === true || hasDefinitions ? 'awaiting' : 'unknown';
-    else if (r.timestamp === null) state = 'awaiting';
-    else if (r.ok === true) {
-      // Only a known per-sensor cadence permits stale classification. A global
-      // manager interval may be overridden by a plugin; never guess from it.
-      const cadence = number(
-        r.poll_interval_seconds ??
-          def.poll_interval_seconds ??
-          record(def.settings).poll_interval_seconds,
-      );
-      const timestamp = typeof r.timestamp === 'string' ? Date.parse(r.timestamp) : NaN;
-      state =
-        cadence !== undefined && cadence > 0 && Number.isFinite(timestamp) && timestamp <= now
-          ? now - timestamp > cadence * 3000
-            ? 'stale'
-            : 'reporting'
-          : 'reporting (age unknown)';
-    }
-    rows.push({
-      label: 'Sensor',
-      value: `${sanitize(def.name ?? r.name)} (${sanitize(def.type ?? r.type)}) · ${state}`,
-    });
-  }
-  return rows;
-}
 export function buildSnapshot(
   statsValue: unknown,
   hardwareValue: unknown,
@@ -439,10 +368,7 @@ export function buildSnapshot(
   add('Uptime', `Host ${uptime(system.uptime)} · Service ${uptime(stats.uptime_seconds)}`);
   const temperatures = compactTemperatures(hw.temperatures);
   if (temperatures) add('Temperatures', temperatures);
-  rows.push(
-    ...radioRows(stats, config, now, list(hardwareOptions)),
-    ...sensorRows(stats, config, now),
-  );
+  rows.push(...radioRows(stats, config, now, list(hardwareOptions)));
   add('Scope', 'Backend-visible system; container limits may apply');
   return rows;
 }

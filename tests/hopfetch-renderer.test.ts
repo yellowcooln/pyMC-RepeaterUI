@@ -11,7 +11,7 @@ describe('hopfetch renderer', () => {
     expect(lines.every((line) => cellWidth(line) <= cols)).toBe(true);
     for (let i = 0; i < 20; i++) expect(lines.join('')).toContain(`-${i}-`);
   });
-  it('fits complete host telemetry, three radios and five sensors in 30 rows', () => {
+  it('fits complete host telemetry and three radios in 30 rows', () => {
     const radios = Array.from({ length: 3 }, (_, i) => ({
       id: `r${i}`,
       name: ['North', 'South', 'Local'][i],
@@ -81,7 +81,7 @@ describe('hopfetch renderer', () => {
     expect(text).toContain('CPU 40°C · Drive 45°C');
     expect(text).not.toContain('cpu_package');
     expect(text).not.toContain('core0');
-    for (const sensor of inventory) expect(text).toContain(sensor.name);
+    expect(lines.every((line) => cellWidth(line) <= 110)).toBe(true);
     for (const radio of radios) expect(text).toContain(radio.name);
   });
   it.each([40, 80, 110, 180])('keeps fitting inventory tokens intact at %i cells', (cols) => {

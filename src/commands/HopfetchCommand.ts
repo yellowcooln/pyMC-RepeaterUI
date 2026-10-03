@@ -9,7 +9,7 @@ import { renderSnapshot } from './hopfetch/renderer';
 export class HopfetchCommand extends BaseCommand {
   name = 'hopfetch';
   aliases = ['fastfetch'];
-  description = 'Show a read-only node, host, radio and sensor snapshot';
+  description = 'Show a read-only node, host and radio snapshot';
   usage = 'hopfetch [--plain] [help|--help]';
 
   async execute({ term, args, writePrompt, signal }: CommandContext): Promise<void> {

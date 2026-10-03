@@ -203,6 +203,50 @@ describe('hopfetch compact hardware', () => {
     ).toBe('Unclassified 80°C');
     expect(buildSnapshot({}, {}).some((r) => r.label === 'Temperatures')).toBe(false);
   });
+  it('omits standalone sensors while retaining both deployed radio models', () => {
+    const inventory = [
+      {
+        name: 'porch-modem',
+        type: 'openhop_modem',
+        enabled: true,
+        loaded: true,
+        source_host: 'porch.local',
+        poll_interval_seconds: 5,
+      },
+      {
+        name: 'third-floor-modem',
+        type: 'openhop_modem',
+        enabled: true,
+        loaded: true,
+        source_host: 'third-floor.local',
+        poll_interval_seconds: 5,
+      },
+      { name: 'unused-modem', type: 'openhop_modem', enabled: true, loaded: false },
+      { name: 'weather', type: 'bme280', enabled: false, loaded: false },
+    ];
+    const rows = buildSnapshot(
+      {
+        radios: [radio('porch', 'porch.local'), radio('third-floor', 'third-floor.local')],
+        sensors: {
+          enabled: true,
+          configured: 4,
+          inventory,
+          readings: [
+            sensor('porch-modem', 'http://porch.local'),
+            sensor('third-floor-modem', 'http://third-floor.local'),
+          ],
+        },
+      },
+      null,
+      now,
+    );
+    expect(rows.some((r) => r.label === 'Sensor' || r.label === 'Sensors')).toBe(false);
+    for (const id of ['porch', 'third-floor']) {
+      expect(rows.find((r) => r.label === `Radio ${id}`)?.value).toContain(
+        'EtherMesh-1W (sensor reported)',
+      );
+    }
+  });
   it('matches exact unique hosts across HTTP/TCP ports without exposing URLs', () => {
     const values = radioValues({
       radios: [radio('a', 'modem.local'), radio('b', 'other.local')],
