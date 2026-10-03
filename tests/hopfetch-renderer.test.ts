@@ -1,18 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { renderSnapshot, cellWidth } from '@/commands/hopfetch/renderer';
 import { buildSnapshot } from '@/commands/hopfetch/model';
+import bunny from '@/commands/hopfetch/bunny.txt?raw';
 describe('hopfetch renderer', () => {
-  it('renders a compact recognizable bunny only when the terminal has room', () => {
-    const wide = renderSnapshot([], { cols: 110, rows: 30 })
-      .join('\n')
-      .replace(/\x1b\[[0-9;]*m/g, '');
-    expect(wide).toContain('( o.o )');
-    expect(wide).toContain('(__) (__)');
-    expect(wide).toContain('openHop');
-    expect(wide.split('\n')).toHaveLength(11);
-    expect(renderSnapshot([], { cols: 80, rows: 30 }).join('\n')).not.toContain('( o.o )');
-    expect(renderSnapshot([], { cols: 110, rows: 8 }).join('\n')).not.toContain('( o.o )');
-    expect(renderSnapshot([], { cols: 110, rows: 30, plain: true })).toEqual([]);
+  it('preserves every supplied bunny row and falls back when width or height is limited', () => {
+    const artwork = bunny.replace(/\n$/, '').split('\n');
+    const brandWidth = Math.max(...artwork.map(cellWidth));
+    const cols = brandWidth + 2 + 80;
+    const lines = renderSnapshot([{ label: 'Node', value: 'Hill' }], { cols, rows: 30 });
+    const clean = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ''));
+    expect(artwork).toHaveLength(22);
+    for (const [i, row] of artwork.entries()) {
+      expect(clean[i]!.slice(0, brandWidth)).toBe(row.padEnd(brandWidth));
+    }
+    expect(clean[0]!.slice(brandWidth + 2)).toContain('Node:');
+    expect(clean).toHaveLength(24);
+    expect(clean[23]).toContain('openHop');
+    expect(lines.every((line) => cellWidth(line) <= cols)).toBe(true);
+    for (const options of [
+      { cols: cols - 1, rows: 30 },
+      { cols, rows: 23 },
+    ]) {
+      const fallback = renderSnapshot([], options);
+      expect(fallback).toHaveLength(1);
+      expect(fallback.join('')).not.toContain('@/');
+    }
+    expect(renderSnapshot([], { cols, rows: 30, plain: true })).toEqual([]);
   });
   it.each([60, 80])('bolds every radio label with aligned RF continuations at %i cells', (cols) => {
     const rows = ['porch', 'third-floor'].map((name) => ({
@@ -162,10 +175,10 @@ describe('hopfetch renderer', () => {
     expect(text).toContain('\x1b[1;37m');
     expect(text).not.toContain('\x1b[1;36m');
   });
-  it('includes a compact leaping rabbit rather than only three brand words', () => {
-    const lines = renderSnapshot(buildSnapshot({}, null), { cols: 110 });
+  it('includes the supplied rabbit beside host telemetry on a wide terminal', () => {
+    const lines = renderSnapshot(buildSnapshot({}, null), { cols: 192 });
     expect(lines.join('')).toContain('openHop');
-    expect(lines.join('')).toContain('(__');
+    expect(lines.join('')).toContain('@@//$//%');
     expect(lines.length).toBeLessThanOrEqual(30);
   });
   it('plain has no logo or ANSI; injected controls cannot execute', () => {

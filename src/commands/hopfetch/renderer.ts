@@ -1,6 +1,7 @@
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import type { Terminal, IUnicodeVersionProvider } from '@xterm/xterm';
 import { sanitize, type SnapshotRow } from './model';
+import bunny from './bunny.txt?raw';
 
 // Use the exact width table loaded by Terminal.vue, rather than JS string length
 // or a different Unicode release. Activation only registers a pure provider.
@@ -64,23 +65,14 @@ export interface RenderOptions {
 }
 export function renderSnapshot(rows: SnapshotRow[], options: RenderOptions): string[] {
   const cols = Math.max(2, Math.floor(options.cols || 80));
-  // Compact bunny with distinct ears, face and paws. Keep the existing
-  // Terminal introduction independent and preserve the narrow-screen fallback.
-  const brand = [
-    '       /\\   /\\',
-    '      /  \\ /  \\',
-    '      \\  | |  /',
-    '       \\ |_| /',
-    '       ( o.o )',
-    '      /  >Y<  \\',
-    '     (_|     |_)',
-    '       \\_____/',
-    '      (__) (__)',
-    '',
-    '       openHop',
-  ];
+  // User-supplied first-frame artwork: preserve every glyph and leading space.
+  // Keep it out of the data column unless that column still has useful width.
+  const artwork = bunny.replace(/\n$/, '').split('\n');
+  const artworkWidth = Math.max(...artwork.map(cellWidth));
+  const brand = [...artwork, '', ' '.repeat(Math.floor((artworkWidth - 7) / 2)) + 'openHop'];
   const brandWidth = Math.max(...brand.map(cellWidth));
-  const side = !options.plain && cols >= 100 && (options.rows ?? 30) >= brand.length;
+  const side =
+    !options.plain && cols >= brandWidth + 2 + 80 && (options.rows ?? 30) >= brand.length;
   const margin = side ? brandWidth + 2 : 0;
   const width = cols - margin;
   const output: string[] = [];
