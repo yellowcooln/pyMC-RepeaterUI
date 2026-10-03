@@ -86,19 +86,24 @@ export function renderSnapshot(rows: SnapshotRow[], options: RenderOptions): str
   // Accent cyan has only 2.14:1 contrast on the light surface; text has >17:1.
   const color = (text: string) => (options.plain ? text : `\x1b[1;37m${text}\x1b[0m`);
   if (!side && !options.plain) output.push(...wrap('openHop · Repeater snapshot', cols).map(color));
+  const labelWidth = Math.min(
+    rows.reduce((max, row) => Math.max(max, cellWidth(sanitize(row.label)) + 2), 14),
+    28,
+    Math.floor(width / 3),
+  );
   for (const row of rows) {
     const label = sanitize(row.label);
     const value = sanitize(row.value);
-    // Fixed compact label column only when useful width remains; narrow screens
-    // wrap the whole row without truncating names or inventory entries.
-    const labelWidth = Math.min(14, Math.floor(width / 3));
+    // A bounded shared label column gives each record hanging continuations.
+    // Oversized labels and tiny terminals stack; wrap before styling so no
+    // responsive path can silently drop bold or split ANSI sequences.
     if (cellWidth(label) + 2 <= labelWidth && width >= 45) {
       const prefix = label + ': ' + ' '.repeat(labelWidth - cellWidth(label) - 2);
       wrap(value, width - labelWidth).forEach((part, i) =>
         output.push((i === 0 ? color(prefix) : ' '.repeat(labelWidth)) + part),
       );
     } else {
-      output.push(...wrap(`${label}: ${value}`, width));
+      output.push(...wrap(`${label}:`, width).map(color), ...wrap(value, width));
     }
   }
   if (side) {

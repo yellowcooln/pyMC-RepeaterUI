@@ -170,7 +170,7 @@ describe('hopfetch compact hardware', () => {
       'PineDio CH341 + SX1262 preset',
     );
     expect(rows.find((r) => r.label === 'Radio custom')?.value).toContain('Custom');
-    expect(rows.find((r) => r.label === '  RF config')?.value).toContain('915 MHz');
+    expect(rows.find((r) => r.label === 'Radio usb')?.value).toContain('915 MHz');
   });
   it('summarizes a 39-channel server without dumping cores', () => {
     const temperatures = Object.fromEntries(
@@ -242,9 +242,7 @@ describe('hopfetch compact hardware', () => {
     );
     expect(rows.some((r) => r.label === 'Sensor' || r.label === 'Sensors')).toBe(false);
     for (const id of ['porch', 'third-floor']) {
-      expect(rows.find((r) => r.label === `Radio ${id}`)?.value).toContain(
-        'EtherMesh-1W (sensor reported)',
-      );
+      expect(rows.find((r) => r.label === `Radio ${id}`)?.value).toContain('EtherMesh-1W');
     }
   });
   it('matches exact unique hosts across HTTP/TCP ports without exposing URLs', () => {

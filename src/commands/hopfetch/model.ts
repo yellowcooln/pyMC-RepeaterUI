@@ -153,9 +153,7 @@ function modemModel(stats: RecordData, hardware: RecordData, now: number): strin
     return;
   const data = record(r.data);
   const board = data.system_board ?? record(data.system).board;
-  return typeof board === 'string' && board.trim()
-    ? `${sanitize(board)} (sensor reported)`
-    : undefined;
+  return typeof board === 'string' && board.trim() ? sanitize(board) : undefined;
 }
 const hardwareDefaults: RecordData = {
   gpio_chip: 0,
@@ -284,13 +282,13 @@ function radioRows(
       ? [{ id: profiles[0]?.radio_id ?? 'radio0', radio_type: kind }]
       : profiles;
   if (!entries.length) return [{ label: 'Radios', value: 'inventory unknown' }];
-  return entries.flatMap((entry, i) => {
+  return entries.map((entry, i) => {
     const id = entry.id ?? entry.radio_id ?? `radio${i}`;
     const backend = Object.prototype.hasOwnProperty.call(entry, 'radio_type')
       ? entry.radio_type
       : kind;
     const profile = profiles.find((p) => String(p.radio_id) === String(id));
-    const rf = profile ?? { ...record(config.radio), ...record(entry.radio) };
+    const rf = profile ?? record(configured.length ? entry.radio : config.radio);
     const hardware = configured.length ? entry : { ...config, ...stats };
     const deviceHost = hostToken(record(hardware.modem_tcp).host);
     const ambiguousRadioHost =
@@ -317,20 +315,15 @@ function radioRows(
       [null, '', 'none', 'disabled', 'off', 'null', 'no_radio'].includes(backend as string | null)
         ? 'disabled'
         : down
-          ? 'link disconnected'
-          : 'link unknown';
+          ? 'disconnected'
+          : undefined;
     const freq = number(profile ? rf.frequency_hz : rf.frequency);
     const bw = number(profile ? rf.bandwidth_hz : rf.bandwidth);
-    return [
-      {
-        label: `Radio ${sanitize(id)}`,
-        value: `${entry.name ? sanitize(entry.name) + ' · ' : ''}${identity ? identity + ' · ' : ''}${sanitize(backend)} · ${link}`,
-      },
-      {
-        label: '  RF config',
-        value: `${shown(freq === undefined ? undefined : freq / 1e6, ' MHz')} · BW ${shown(bw === undefined ? undefined : bw / 1e3, ' kHz')} · SF ${shown(rf.spreading_factor)} · CR ${shown(rf.coding_rate)} · power ${shown(rf.tx_power, ' dBm')}`,
-      },
-    ];
+    const rfConfig = `${shown(freq === undefined ? undefined : freq / 1e6, ' MHz')} · BW ${shown(bw === undefined ? undefined : bw / 1e3, ' kHz')} · SF ${shown(rf.spreading_factor)} · CR ${shown(rf.coding_rate)} · power ${shown(rf.tx_power, ' dBm')}`;
+    return {
+      label: `Radio ${sanitize(entry.name || id)}`,
+      value: [identity, rfConfig, link].filter(Boolean).join(' · '),
+    };
   });
 }
 export function buildSnapshot(

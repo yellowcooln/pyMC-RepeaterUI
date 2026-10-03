@@ -2,6 +2,42 @@ import { describe, expect, it } from 'vitest';
 import { renderSnapshot, cellWidth } from '@/commands/hopfetch/renderer';
 import { buildSnapshot } from '@/commands/hopfetch/model';
 describe('hopfetch renderer', () => {
+  it.each([60, 80])('bolds every radio label with aligned RF continuations at %i cells', (cols) => {
+    const rows = ['porch', 'third-floor'].map((name) => ({
+      label: `Radio ${name}`,
+      value: 'EtherMesh-1W · 915 MHz · BW 125 kHz · SF 7 · CR 5 · power 22 dBm · disabled',
+    }));
+    const lines = renderSnapshot(rows, { cols });
+    for (const row of rows) {
+      const start = lines.findIndex((line) => line.includes(row.label));
+      expect(lines[start]).toContain(`\x1b[1;37m${row.label}:`);
+      expect(lines[start + 1]).toMatch(/^ +\S/);
+      expect(lines[start + 1]!.search(/\S/)).toBe(
+        lines[start]!.replace(/\x1b\[[0-9;]*m/g, '').indexOf('EtherMesh'),
+      );
+    }
+    expect(lines.every((line) => cellWidth(line) <= cols)).toBe(true);
+  });
+  it.each([2, 8, 24, 40, 60])(
+    'wraps long Unicode labels without losing bold at %i cells',
+    (cols) => {
+      const label = 'Radio 測試é🛰️-' + 'long'.repeat(8);
+      const value = '915 MHz · BW 125 kHz · SF 7 · CR 5 · power 22 dBm';
+      const lines = renderSnapshot([{ label, value }], { cols });
+      const bold = lines
+        .slice(renderSnapshot([], { cols }).length)
+        .filter((line) => line.startsWith('\x1b[1;37m'));
+      expect(bold.length).toBeGreaterThan(0);
+      expect(
+        bold
+          .join('')
+          .replace(/\x1b\[[0-9;]*m/g, '')
+          .replace(/\s/g, ''),
+      ).toBe((label + ':').replace(/\s/g, ''));
+      expect(lines.every((line) => cellWidth(line) <= cols)).toBe(true);
+      expect(lines.every((line) => !line.replace(/\x1b\[[0-9;]*m/g, '').startsWith('́'))).toBe(true);
+    },
+  );
   it.each([24, 40, 80, 110, 180])('wraps every entry within %i cells', (cols) => {
     const rows = Array.from({ length: 20 }, (_, i) => ({
       label: `Radio ${i}`,
@@ -101,7 +137,7 @@ describe('hopfetch renderer', () => {
       cols: 12,
       plain: true,
     });
-    expect(lines).toEqual(['X: alpha', 'beta gamma']);
+    expect(lines).toEqual(['X:', 'alpha beta', 'gamma']);
     const long = '測試é'.repeat(12);
     const hard = renderSnapshot([{ label: 'X', value: long }], { cols: 12, plain: true });
     expect(hard.every((line) => cellWidth(line) <= 12)).toBe(true);
