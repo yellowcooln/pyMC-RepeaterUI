@@ -18,6 +18,7 @@ import { PingCommand } from './PingCommand';
 import { DiscoverNeighborsCommand } from './DiscoverNeighborsCommand';
 import { NeighborRemoveCommand } from './NeighborRemoveCommand';
 import { RegionCommand } from './RegionCommand';
+import { HopfetchCommand } from './HopfetchCommand';
 
 export class CommandRegistry {
   private commands: BaseCommand[] = [];
@@ -42,6 +43,7 @@ export class CommandRegistry {
     const discoverNeighborsCmd = new DiscoverNeighborsCommand();
     const neighborRemoveCmd = new NeighborRemoveCommand();
     const regionCmd = new RegionCommand();
+    const hopfetchCmd = new HopfetchCommand();
 
     // Help command needs access to all commands
     const helpCmd = new HelpCommand([
@@ -63,6 +65,7 @@ export class CommandRegistry {
       discoverNeighborsCmd,
       neighborRemoveCmd,
       regionCmd,
+      hopfetchCmd,
     ]);
 
     this.commands = [
@@ -85,6 +88,7 @@ export class CommandRegistry {
       discoverNeighborsCmd,
       neighborRemoveCmd,
       regionCmd,
+      hopfetchCmd,
     ];
   }
 

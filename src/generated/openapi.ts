@@ -38,12 +38,26 @@ export interface SensorReading {
   metrics?: SensorMetricDescriptor[];
 }
 
+/** Safe configured identity/status at the last sensor reload; includes disabled and failed-to-load definitions, regardless of cached readings. No settings, credentials, URLs, or load errors. */
+export interface SensorInventoryEntry {
+  /** Configured name, falling back to the configured type or sensor as in sensor loading. */
+  name: string;
+  /** Registry-normalized configured type (trimmed and lowercase); empty for a missing or invalid type. */
+  type: string;
+  /** Whether this definition is enabled, defaulting to true. */
+  enabled: boolean;
+  /** Whether this definition instantiated a sensor, not whether its connection or latest reading is healthy. */
+  loaded: boolean;
+}
+
 export interface SensorSummary {
   enabled?: boolean;
   poll_interval_seconds?: number;
   configured?: number;
   loaded?: number;
   running?: boolean;
+  /** Additive configured sensor inventory, independent of latest readings. */
+  inventory?: SensorInventoryEntry[];
   readings?: SensorReading[];
 }
 
@@ -697,7 +711,7 @@ export interface ACLClient {
    */
   last_activity?: number;
   /**
-   * Unix timestamp of last successful login
+   * Unix timestamp of last successful login, 0 if none. Kept across restarts for entries that persist; last_activity resets to 0.
    * @example 1766065146
    */
   last_login_success?: number;
@@ -722,6 +736,33 @@ export interface ACLClient {
    * @example "0xC5"
    */
   identity_hash?: string;
+  /**
+   * The client's advertised name, from an advert the repeater heard or
+   * else a companion's contact for it; null when neither knows it.
+   * @example "Howl"
+   */
+  client_name?: string | null;
+  /**
+   * Contact type from the client's advert (e.g. "Chat Node"), when heard
+   * @example "Chat Node"
+   */
+  client_type?: string | null;
+  /**
+   * Full public key of the identity, unique where the hash is not
+   * @pattern ^[0-9a-fA-F]{64}$
+   */
+  identity_pubkey?: string;
+  /**
+   * The whole permissions byte; the role is its low two bits
+   * @example 3
+   */
+  permissions_value?: number;
+  /**
+   * Whether the entry is stored and survives a restart. The repeater
+   * stores every entry with permissions, a room server admins only.
+   * @example true
+   */
+  persisted?: boolean;
 }
 
 export type QueryParamsType = Record<string | number, any>;
@@ -3694,8 +3735,30 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
               hash?: string;
               /** @example 100 */
               max_clients?: number;
-              /** @example 5 */
+              /**
+               * Entries that logged in or sent a message since
+               * they were loaded. Entries provisioned with
+               * setperm and not yet used are not counted.
+               * @example 5
+               */
               authenticated_clients?: number;
+              /**
+               * Set while the stored ACL cannot be read (at
+               * startup, and until a later login or change
+               * reads it): stored entries cannot log in, and
+               * the entries listed are not the stored ones.
+               */
+              store_error?: string | null;
+              /**
+               * All entries in the ACL, sessions and provisioned
+               * @example 7
+               */
+              acl_entries?: number;
+              /**
+               * Entries kept across restarts
+               * @example 2
+               */
+              stored_entries?: number;
               /** @example true */
               has_admin_password?: boolean;
               /** @example true */
@@ -3719,7 +3782,7 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
   };
   aclClients = {
     /**
-     * @description Get list of authenticated clients in access control list for an identity
+     * @description List the entries in an identity's access control list: sessions from logins, and entries provisioned with setperm or /acl_set_permissions that may not have logged in yet (last_activity 0).
      *
      * @tags ACL
      * @name AclClientsList
@@ -3749,8 +3812,16 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
             clients?: ACLClient[];
             /** Number of clients returned */
             count?: number;
+            /**
+             * Identity name to error, for identities whose stored ACL
+             * cannot be read now; their list is not the stored one.
+             */
+            store_errors?: Record<string, string>;
             /** Filter applied (if any) */
-            filter?: string | null;
+            filter?: {
+              identity_hash?: string | null;
+              identity_name?: string | null;
+            } | null;
           };
         },
         any
@@ -3774,20 +3845,22 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     aclRemoveClientCreate: (
       data: {
         /**
+         * Identity name ("repeater" or a room server's name). Preferred
+         * over identity_hash, which two identities can share. With
+         * neither, the client is removed from every ACL.
+         * @example "repeater"
+         */
+        identity_name?: string;
+        /**
          * Identity hash
          * @pattern ^0x[0-9a-fA-F]{2}$
          * @example "0x42"
          */
-        identity_hash: string;
+        identity_hash?: string;
         /**
-         * Identity name (alternative to hash)
-         * @example "General"
-         */
-        identity_name?: string;
-        /**
-         * Client public key to remove
+         * Client public key to remove. Its stored entry is removed too.
          * @pattern ^[0-9a-fA-F]{64}$
-         * @example "abc123def456..."
+         * @example "03ccf3bb0bed9a5109868a1e33ed020519aab6dbb30e42df3b11a21d21416fff"
          */
         client_pubkey: string;
       },
@@ -3795,6 +3868,64 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
     ) =>
       this.request<SuccessResponse, any>({
         path: `/acl_remove_client`,
+        method: 'POST',
+        body: data,
+        type: ContentType.Json,
+        format: 'json',
+        ...params,
+      }),
+  };
+  aclSetPermissions = {
+    /**
+     * @description The web equivalent of the `setperm` CLI command. The entry is stored, so the key logs in with a blank password after a restart. A room server stores admins only, as MeshCore firmware does; other roles there last until a restart (`persisted: false`). To remove an entry, use /acl_remove_client.
+     *
+     * @tags ACL
+     * @name AclSetPermissionsCreate
+     * @summary Add or change an ACL entry
+     * @request POST:/acl_set_permissions
+     */
+    aclSetPermissionsCreate: (
+      data: {
+        /**
+         * Identity name ("repeater" or a room server's name)
+         * @example "repeater"
+         */
+        identity_name: string;
+        /**
+         * Full client public key
+         * @pattern ^[0-9a-fA-F]{64}$
+         * @example "03ccf3bb0bed9a5109868a1e33ed020519aab6dbb30e42df3b11a21d21416fff"
+         */
+        client_pubkey: string;
+        /**
+         * Permissions byte. The low two bits are the role: 1 read-only,
+         * 2 read-write, 3 admin; 0 (guest) is refused here.
+         * @min 1
+         * @max 255
+         * @example 3
+         */
+        permissions: number;
+      },
+      params: RequestParams = {},
+    ) =>
+      this.request<
+        {
+          success?: boolean;
+          message?: string;
+          error?: string;
+          data?: {
+            identity_name?: string;
+            identity_type?: 'repeater' | 'room_server';
+            client_pubkey?: string;
+            permissions?: 'admin' | 'read_write' | 'read_only' | 'guest';
+            permissions_value?: number;
+            /** Whether the entry survives a restart */
+            persisted?: boolean;
+          };
+        },
+        any
+      >({
+        path: `/acl_set_permissions`,
         method: 'POST',
         body: data,
         type: ContentType.Json,
@@ -3816,8 +3947,20 @@ export class Api<SecurityDataType extends unknown> extends HttpClient<SecurityDa
         {
           success?: boolean;
           data?: {
-            total_entries?: number;
-            by_identity?: object;
+            /** Identities with an access list (the repeater and room servers) */
+            total_identities?: number;
+            /** ACL entries across them, sessions and provisioned alike */
+            total_clients?: number;
+            admin_clients?: number;
+            /** Entries that are not admins (any other role) */
+            guest_clients?: number;
+            by_identity_type?: Record<
+              string,
+              {
+                count?: number;
+                clients?: number;
+              }
+            >;
           };
         },
         any

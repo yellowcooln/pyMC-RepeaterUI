@@ -3,6 +3,7 @@ import type { Terminal } from '@xterm/xterm';
 export interface CommandContext {
   term: Terminal;
   args: string[];
+  signal?: AbortSignal;
   writePrompt: () => void;
 }
 

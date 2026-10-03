@@ -4,6 +4,8 @@ import type { ApiResponse } from './api';
 export type FetchPhase = 'connecting' | 'receiving';
 
 export interface StreamingGetOptions {
+  /** Optional caller lifecycle cancellation; does not cancel shared store requests. */
+  signal?: AbortSignal;
   /** ms before aborting if no first byte arrives. Default: 15 000 */
   connectTimeoutMs?: number;
   /** ms of inactivity after streaming starts before aborting. Default: 5 000 */
@@ -31,6 +33,9 @@ export async function streamingGet<T>(
   const { connectTimeoutMs = 15_000, idleTimeoutMs = 5_000, onPhaseChange } = options;
 
   const controller = new AbortController();
+  const abort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) abort();
   let streamStarted = false;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -45,9 +50,8 @@ export async function streamingGet<T>(
     }, idleTimeoutMs);
   };
 
-  onPhaseChange?.('connecting');
-
   try {
+    onPhaseChange?.('connecting');
     return await ApiService.get<T>(endpoint, params, {
       signal: controller.signal,
       timeout: 0, // Disable axios instance timeout; AbortController handles timeouts
@@ -63,6 +67,7 @@ export async function streamingGet<T>(
       },
     });
   } finally {
+    options.signal?.removeEventListener('abort', abort);
     clearTimeout(connectTimer);
     if (idleTimer) clearTimeout(idleTimer);
   }

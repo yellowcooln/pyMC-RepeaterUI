@@ -67,6 +67,7 @@ let currentLine = '';
 const commandHistory: string[] = [];
 let historyIndex = -1;
 let suggestionText = '';
+let activeSnapshot: AbortController | null = null;
 
 // Command registry
 const commandRegistry = new CommandRegistry();
@@ -78,6 +79,8 @@ let neighborNamesCacheTime = 0;
 
 // Parameter suggestions for commands that take arguments
 const PARAM_SUGGESTIONS: Record<string, string[]> = {
+  hopfetch: ['--plain', 'help', '--help'],
+  fastfetch: ['--plain', 'help', '--help'],
   get: [
     'name',
     'role',
@@ -304,11 +307,21 @@ onMounted(() => {
   const reset = '\x1b[0m';
 
   term.writeln('');
-  term.writeln(`${logoColor}    ██████  ██████  ███████ ███    ██ ██   ██  ██████  ██████ ${reset}`);
-  term.writeln(`${logoColor}   ██    ██ ██   ██ ██      ████   ██ ██   ██ ██    ██ ██   ██${reset}`);
-  term.writeln(`${logoColor}   ██    ██ ██████  █████   ██ ██  ██ ███████ ██    ██ ██████ ${reset}`);
-  term.writeln(`${logoColor}   ██    ██ ██      ██      ██  ██ ██ ██   ██ ██    ██ ██     ${reset}`);
-  term.writeln(`${logoColor}    ██████  ██      ███████ ██   ████ ██   ██  ██████  ██     ${reset}`);
+  term.writeln(
+    `${logoColor}    ██████  ██████  ███████ ███    ██ ██   ██  ██████  ██████ ${reset}`,
+  );
+  term.writeln(
+    `${logoColor}   ██    ██ ██   ██ ██      ████   ██ ██   ██ ██    ██ ██   ██${reset}`,
+  );
+  term.writeln(
+    `${logoColor}   ██    ██ ██████  █████   ██ ██  ██ ███████ ██    ██ ██████ ${reset}`,
+  );
+  term.writeln(
+    `${logoColor}   ██    ██ ██      ██      ██  ██ ██ ██   ██ ██    ██ ██     ${reset}`,
+  );
+  term.writeln(
+    `${logoColor}    ██████  ██      ███████ ██   ████ ██   ██  ██████  ██     ${reset}`,
+  );
   term.writeln('');
   term.writeln(`${titleColor}    openHop Repeater Terminal${reset}`);
   term.writeln('');
@@ -329,6 +342,8 @@ onMounted(() => {
 
   // Cleanup
   onUnmounted(() => {
+    activeSnapshot?.abort();
+    activeSnapshot = null;
     resizeObserver.disconnect();
     // Dispose WebGL context explicitly before terminal disposal —
     // term.dispose() cascades to addons but the chain can silently fail on iOS Safari,
@@ -373,6 +388,16 @@ const handleInput = (data: string) => {
   if (!term) return;
 
   const code = data.charCodeAt(0);
+  if (activeSnapshot) {
+    if (code === 3) {
+      activeSnapshot.abort();
+      activeSnapshot = null;
+      currentLine = '';
+      term.write('^C\r\n');
+      writePrompt();
+    }
+    return;
+  }
 
   // Enter key
   if (code === 13) {
@@ -646,18 +671,35 @@ const executeCommand = async (input: string) => {
   const command = commandRegistry.findCommand(cmdName);
 
   if (command) {
+    const target = term;
+    const controller = command.name === 'hopfetch' ? new AbortController() : null;
+    if (controller) activeSnapshot = controller;
+    let prompted = false;
+    const promptOnce = () => {
+      if (prompted || term !== target || controller?.signal.aborted) return;
+      prompted = true;
+      writePrompt();
+    };
     try {
       await command.execute({
-        term,
+        term: target,
         args,
-        writePrompt,
+        signal: controller?.signal,
+        writePrompt: promptOnce,
       });
     } catch (err) {
-      console.error('Command execution error:', err);
-      term.writeln(
-        `\x1b[1;31m✗ Error:\x1b[0m ${err instanceof Error ? err.message : 'Command failed'}`,
-      );
-      writePrompt();
+      if (term === target && !controller?.signal.aborted) {
+        if (controller) target.writeln('Snapshot unavailable.');
+        else {
+          console.error('Command execution error:', err);
+          target.writeln(
+            `\x1b[1;31m✗ Error:\x1b[0m ${err instanceof Error ? err.message : 'Command failed'}`,
+          );
+        }
+        promptOnce();
+      }
+    } finally {
+      if (controller && activeSnapshot === controller) activeSnapshot = null;
     }
   } else {
     term.writeln(`\x1b[1;31m✗ Unknown command:\x1b[0m ${cmdName}`);
@@ -668,6 +710,8 @@ const executeCommand = async (input: string) => {
 
 // Search functionality
 const handleClear = () => {
+  activeSnapshot?.abort();
+  activeSnapshot = null;
   if (term) {
     term.clear();
     writePrompt();
@@ -838,11 +882,7 @@ const handleMobileBackspace = () => {
     >
       <div class="flex items-center justify-between">
         <div>
-          <h1
-            class="text-content-primary text-lg md:text-xl font-semibold"
-          >
-            Terminal
-          </h1>
+          <h1 class="text-content-primary text-lg md:text-xl font-semibold">Terminal</h1>
           <p class="text-content-secondary dark:text-content-muted text-sm hidden md:block">
             Interactive command-line interface
           </p>
