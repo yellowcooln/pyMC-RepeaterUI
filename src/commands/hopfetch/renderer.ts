@@ -64,17 +64,19 @@ export interface RenderOptions {
 }
 export function renderSnapshot(rows: SnapshotRow[], options: RenderOptions): string[] {
   const cols = Math.max(2, Math.floor(options.cols || 80));
-  // Compact outline adapted from assets/logo/openhop_logo_vector.svg:
-  // swept-back ears, right-facing head, speed strokes and extended hind leg.
-  // Keep the existing Terminal introduction entirely independent.
+  // Compact bunny with distinct ears, face and paws. Keep the existing
+  // Terminal introduction independent and preserve the narrow-screen fallback.
   const brand = [
-    '       __..._',
-    '      / / /  \\',
-    '      \\_\\/ o  \\_',
-    ' --.___  /    __)',
-    '   (___)/    /',
-    ' --/  ____.-\\',
-    '   \\_/    \\__\\',
+    '       /\\   /\\',
+    '      /  \\ /  \\',
+    '      \\  | |  /',
+    '       \\ |_| /',
+    '       ( o.o )',
+    '      /  >Y<  \\',
+    '     (_|     |_)',
+    '       \\_____/',
+    '      (__) (__)',
+    '',
     '       openHop',
   ];
   const brandWidth = Math.max(...brand.map(cellWidth));

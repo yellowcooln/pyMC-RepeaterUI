@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { renderSnapshot, cellWidth } from '@/commands/hopfetch/renderer';
 import { buildSnapshot } from '@/commands/hopfetch/model';
 describe('hopfetch renderer', () => {
+  it('renders a compact recognizable bunny only when the terminal has room', () => {
+    const wide = renderSnapshot([], { cols: 110, rows: 30 })
+      .join('\n')
+      .replace(/\x1b\[[0-9;]*m/g, '');
+    expect(wide).toContain('( o.o )');
+    expect(wide).toContain('(__) (__)');
+    expect(wide).toContain('openHop');
+    expect(wide.split('\n')).toHaveLength(11);
+    expect(renderSnapshot([], { cols: 80, rows: 30 }).join('\n')).not.toContain('( o.o )');
+    expect(renderSnapshot([], { cols: 110, rows: 8 }).join('\n')).not.toContain('( o.o )');
+    expect(renderSnapshot([], { cols: 110, rows: 30, plain: true })).toEqual([]);
+  });
   it.each([60, 80])('bolds every radio label with aligned RF continuations at %i cells', (cols) => {
     const rows = ['porch', 'third-floor'].map((name) => ({
       label: `Radio ${name}`,
