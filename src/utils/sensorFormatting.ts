@@ -53,14 +53,9 @@ export function groupSensorMetrics(
 
 /** Never guess units or reinterpret numeric strings when metadata is available. */
 export function formatDescriptorMetric(descriptor: SensorMetricDescriptor, value: unknown): string {
-  const valid =
-    descriptor.kind === 'boolean'
-      ? typeof value === 'boolean'
-      : typeof value === 'number' && Number.isFinite(value);
-  if (!descriptor.available || !valid) return 'n/a';
-  if (typeof descriptor.display_value === 'string' && descriptor.display_value.trim())
-    return descriptor.display_value;
-  if (descriptor.kind === 'boolean') return String(value);
+  if (!descriptor.available || value === null || value === undefined) return 'n/a';
+  if (descriptor.kind === 'boolean') return typeof value === 'boolean' ? String(value) : 'n/a';
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'n/a';
   return `${value}${descriptor.unit ? ` ${descriptor.unit}` : ''}`;
 }
 
