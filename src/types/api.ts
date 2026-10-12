@@ -197,6 +197,7 @@ export interface SensorMetricDescriptor {
   kind: 'number' | 'boolean';
   category: 'measurement' | 'diagnostic' | 'configuration' | 'status';
   available: boolean;
+  display_value?: string;
   reason?: 'null' | 'missing' | 'source_unavailable' | 'invalid' | 'read_failed';
 }
 
